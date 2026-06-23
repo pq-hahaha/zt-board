@@ -268,7 +268,7 @@ function onStockDataReady(stocks,names,fromCache){
 function fetchDataViaWorker(url,retryCount){
     var ind=document.getElementById('loadIndicator');
     if(ind)ind.innerHTML='<span style="color:#3498db">正在后台加载('+retryCount+'/3)...</span>';
-    var wc='self.onmessage=function(e){var u=e.data.url;var c=new AbortController();var t=setTimeout(function(){c.abort();},30000);fetch(u,{signal:c.signal}).then(function(r){clearTimeout(t);if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}).then(function(d){var codes=d.c,names=d.s,prices=d.p,n=d.n;var stocks={},nm={};for(var i=0;i<codes.length;i++){var cd=codes[i];nm[cd]=names[i];var sp=new Array(n);for(var j=0;j<n;j++){var p=prices[i*n+j];sp[j]=(p===0)?null:p/100;}stocks[cd]=sp;}self.postMessage({stocks:stocks,names:nm});}).catch(function(err){self.postMessage({error:err.message});});};';
+    var wc='self.onmessage=function(e){var u=e.data.url;var c=new AbortController();var t=setTimeout(function(){c.abort();},30000);fetch(u,{signal:c.signal}).then(function(r){clearTimeout(t);if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}).then(function(d){var stocks,nm;if(d.c&&Array.isArray(d.c)){var codes=d.c,names=d.s,prices=d.p,n=d.n;stocks={};nm={};for(var i=0;i<codes.length;i++){var cd=codes[i];nm[cd]=names[i];var sp=new Array(n);for(var j=0;j<n;j++){var p=prices[i*n+j];sp[j]=(p===0)?null:p/100;}stocks[cd]=sp;}}else{stocks=d.stocks||{};nm=d.names||{};}self.postMessage({stocks:stocks,names:nm});}).catch(function(err){self.postMessage({error:err.message});});};';
     var blob=new Blob([wc],{type:'application/javascript'});
     var worker=new Worker(URL.createObjectURL(blob));
     worker.onmessage=function(e){
