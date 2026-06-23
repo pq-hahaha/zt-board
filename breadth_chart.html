@@ -36,6 +36,20 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
 .lock-btn { width:100%; padding:12px; background:linear-gradient(135deg,#1a3c7a,#2E75B5); color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; margin-top:16px; transition:opacity 0.3s; }
 .lock-btn:hover { opacity:0.85; }
 .lock-err { color:#C00000; font-size:13px; margin-top:12px; display:none; }
+.watchlist-panel { max-width:100%; margin:0 auto 8px; padding:8px 12px; background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+.watchlist-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+.watchlist-title { font-size:13px; color:#555; font-weight:600; }
+.watchlist-count { font-size:12px; color:#888; }
+.wl-mgmt-btn { font-size:11px; padding:2px 8px; background:#95a5a6; color:#fff; border:none; border-radius:3px; cursor:pointer; }
+.wl-mgmt-btn:hover { background:#7f8c8d; }
+.watchlist-items { display:flex; flex-wrap:wrap; gap:6px; max-height:100px; overflow-y:auto; }
+.wl-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#e8f4fd; border:1px solid #b8d8f0; border-radius:12px; font-size:12px; cursor:pointer; transition:all 0.2s; user-select:none; }
+.wl-chip:hover { background:#d0e8fc; border-color:#3498db; }
+.wl-chip.selected { background:#fadbd8; border-color:#e74c3c; }
+.chip-x { color:#aaa; font-size:14px; font-weight:bold; padding:0 2px; cursor:pointer; }
+.chip-x:hover { color:#e74c3c; }
+.wl-del-btn { font-size:11px; padding:2px 8px; background:#e74c3c; color:#fff; border:none; border-radius:3px; cursor:pointer; }
+.wl-del-btn:hover { background:#c0392b; }
 </style>
 </head>
 <body>
@@ -46,10 +60,25 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
     <p style="font-size:13px;color:#888;margin-top:4px;">最新交易日: <b style="color:#e74c3c">2026-06-23</b> | 数据区间: 2026-06-12 ~ 2026-06-23</p>
 </div>
 <div class="control-bar">
-    <input type="text" id="stockCode" placeholder="股票代码" value="600519" onkeypress="if(event.key==='Enter')loadStock()">
+    <input type="text" id="stockCode" placeholder="股票代码" value="600519" onkeypress="if(event.key==='Enter')loadStock()" oninput="updateWatchlistBtn()">
     <button onclick="loadStock()">查看</button>
+    <button onclick="addToWatchlist()" id="addWatchlistBtn" style="background:#27ae60;">入观察池</button>
     <span id="stockName">贵州茅台(600519)</span>
     <span id="loadIndicator" style="font-size:12px;color:#aaa;margin-left:8px;">正在加载全市场数据...</span>
+</div>
+<div class="watchlist-panel">
+    <div class="watchlist-header">
+        <span class="watchlist-title">观察池</span>
+        <span class="watchlist-count" id="watchlistCount">0/30</span>
+        <button class="wl-mgmt-btn" id="manageWatchlistBtn" onclick="toggleManageMode()">管理</button>
+        <span id="batchDeleteArea" style="display:none;">
+            <button class="wl-del-btn" id="batchDeleteBtn" onclick="removeFromWatchlistBatch()">删除选中(0)</button>
+            <button class="wl-mgmt-btn" onclick="toggleSelectAll()">全选</button>
+        </span>
+    </div>
+    <div class="watchlist-items" id="watchlistItems">
+        <span style="color:#bbb;font-size:12px;">观察池为空，查看个股后点击"入观察池"添加</span>
+    </div>
 </div>
 <div id="chart"></div>
 <div class="info">红线: 个股5分钟收盘价(左轴) | 蓝线: 全市场上涨家数(右轴) | 底色: 4时段赚钱效应</div>
@@ -217,6 +246,8 @@ function loadAllStockData() {
             dataLoaded = true;
             var indicator = document.getElementById('loadIndicator');
             if (indicator) indicator.style.display = 'none';
+            renderWatchlist();
+            updateWatchlistBtn();
         })
         .catch(function(e) {
             var indicator = document.getElementById('loadIndicator');
@@ -240,6 +271,117 @@ function loadStock() {
     document.getElementById('stockName').textContent = name + '(' + code + ')';
     currentPriceData = allStockData[code];
     chart.setOption(buildOption(currentPriceData));
+    updateWatchlistBtn();
+}
+
+// === 观察池功能 ===
+var WL_KEY = 'zt_watchlist';
+var WL_MAX = 30;
+var wlMode = 'normal';
+var wlSelected = new Set();
+
+function getWatchlist() {
+    try { return JSON.parse(localStorage.getItem(WL_KEY)) || []; }
+    catch(e) { return []; }
+}
+function saveWatchlist(list) {
+    localStorage.setItem(WL_KEY, JSON.stringify(list));
+}
+function addToWatchlist() {
+    var code = document.getElementById('stockCode').value.trim();
+    if (!code || !dataLoaded) return;
+    var list = getWatchlist();
+    if (list.length >= WL_MAX) return;
+    for (var i = 0; i < list.length; i++) {
+        if (list[i].code === code) return;
+    }
+    var name = stockNames[code] || code;
+    list.push({code: code, name: name});
+    saveWatchlist(list);
+    renderWatchlist();
+    updateWatchlistBtn();
+}
+function removeFromWatchlist(code) {
+    var list = getWatchlist().filter(function(item) { return item.code !== code; });
+    saveWatchlist(list);
+    renderWatchlist();
+    updateWatchlistBtn();
+}
+function removeFromWatchlistBatch() {
+    if (wlSelected.size === 0) return;
+    var list = getWatchlist().filter(function(item) { return !wlSelected.has(item.code); });
+    saveWatchlist(list);
+    wlSelected.clear();
+    renderWatchlist();
+    updateWatchlistBtn();
+}
+function loadFromWatchlist(code) {
+    document.getElementById('stockCode').value = code;
+    loadStock();
+}
+function toggleManageMode() {
+    wlMode = wlMode === 'normal' ? 'manage' : 'normal';
+    wlSelected.clear();
+    renderWatchlist();
+}
+function toggleSelect(code) {
+    if (wlSelected.has(code)) wlSelected.delete(code);
+    else wlSelected.add(code);
+    renderWatchlist();
+}
+function toggleSelectAll() {
+    var list = getWatchlist();
+    if (wlSelected.size === list.length) wlSelected.clear();
+    else { wlSelected.clear(); list.forEach(function(item) { wlSelected.add(item.code); }); }
+    renderWatchlist();
+}
+function updateWatchlistBtn() {
+    var list = getWatchlist();
+    var countEl = document.getElementById('watchlistCount');
+    if (countEl) countEl.textContent = list.length + '/' + WL_MAX;
+    var btn = document.getElementById('addWatchlistBtn');
+    if (!btn) return;
+    var code = document.getElementById('stockCode').value.trim();
+    var exists = list.some(function(item) { return item.code === code; });
+    if (list.length >= WL_MAX) {
+        btn.disabled = true; btn.textContent = '池满'; btn.style.background = '#aaa';
+    } else if (exists) {
+        btn.disabled = true; btn.textContent = '已在池中'; btn.style.background = '#aaa';
+    } else if (!dataLoaded || !allStockData[code]) {
+        btn.disabled = true; btn.textContent = '入观察池'; btn.style.background = '#aaa';
+    } else {
+        btn.disabled = false; btn.textContent = '入观察池'; btn.style.background = '#27ae60';
+    }
+}
+function renderWatchlist() {
+    var list = getWatchlist();
+    var container = document.getElementById('watchlistItems');
+    if (!container) return;
+    var manageBtn = document.getElementById('manageWatchlistBtn');
+    var batchArea = document.getElementById('batchDeleteArea');
+    var batchBtn = document.getElementById('batchDeleteBtn');
+    if (manageBtn) manageBtn.textContent = wlMode === 'normal' ? '管理' : '退出管理';
+    if (batchArea) batchArea.style.display = wlMode === 'manage' ? 'inline' : 'none';
+    if (batchBtn) batchBtn.textContent = '删除选中(' + wlSelected.size + ')';
+    if (list.length === 0) {
+        container.innerHTML = '<span style="color:#bbb;font-size:12px;">观察池为空，查看个股后点击"入观察池"添加</span>';
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+        var item = list[i];
+        var sel = wlSelected.has(item.code);
+        if (wlMode === 'manage') {
+            html += '<div class="wl-chip' + (sel ? ' selected' : '') + '" onclick="toggleSelect(\'' + item.code + '\')">';
+            html += '<input type="checkbox" ' + (sel ? 'checked' : '') + ' style="margin-right:3px;pointer-events:none;">';
+            html += item.name + '(' + item.code + ')</div>';
+        } else {
+            html += '<div class="wl-chip" onclick="loadFromWatchlist(\'' + item.code + '\')">';
+            html += '<span>' + item.name + '(' + item.code + ')</span>';
+            html += '<span class="chip-x" onclick="event.stopPropagation();removeFromWatchlist(\'' + item.code + '\')">&times;</span></div>';
+        }
+    }
+    container.innerHTML = html;
 }
 </script>
 </body>
