@@ -207,7 +207,7 @@ window.addEventListener('resize', function() { chart.resize(); });
 // 异步加载全市场股票数据
 function loadAllStockData() {
     var dataUrl = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/breadth_stock_data.json'
+        ? 'https://raw.githubusercontent.com/pq-hahaha/zt-board/main/breadth_stock_data.json'
         : 'breadth_stock_data.json';
     fetch(dataUrl)
         .then(function(r) { return r.json(); })
