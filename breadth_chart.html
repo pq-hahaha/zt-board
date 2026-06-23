@@ -251,26 +251,47 @@ function buildOption(priceData) {
 chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
-// 异步加载全市场股票数据
-function loadAllStockData() {
-    var dataUrl = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/breadth_stock_data.json'
-        : 'breadth_stock_data.json';
-    fetch(dataUrl)
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            allStockData = d.stocks || {};
-            stockNames = d.names || {};
-            dataLoaded = true;
-            var indicator = document.getElementById('loadIndicator');
-            if (indicator) indicator.style.display = 'none';
-            renderWatchlist();
-            updateWatchlistBtn();
-        })
-        .catch(function(e) {
-            var indicator = document.getElementById('loadIndicator');
-            if (indicator) indicator.innerHTML = '<span style="color:#e74c3c">数据加载失败，刷新重试</span>';
-        });
+// === IndexedDB 缓存 ===
+var DATA_VERSION = 'v1_20260623';
+function openDB(){return new Promise(function(resolve,reject){var req=indexedDB.open('zt_board',1);req.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains('cache'))db.createObjectStore('cache',{keyPath:'key'});};req.onsuccess=function(e){resolve(e.target.result);};req.onerror=function(e){reject(e);};});}
+function getCache(key){return openDB().then(function(db){return new Promise(function(resolve){var tx=db.transaction('cache','readonly');var r=tx.objectStore('cache').get(key);r.onsuccess=function(){resolve(r.result?r.result.value:null);};r.onerror=function(){resolve(null);};});}).catch(function(){return null;});}
+function setCache(key,val){return openDB().then(function(db){return new Promise(function(resolve){var tx=db.transaction('cache','readwrite');tx.objectStore('cache').put({key:key,value:val});tx.oncomplete=function(){resolve();};tx.onerror=function(){resolve();};});}).catch(function(){});}
+
+// === 加载全市场股票数据 ===
+function onStockDataReady(stocks,names,fromCache){
+    allStockData=stocks;stockNames=names;dataLoaded=true;
+    var ind=document.getElementById('loadIndicator');
+    if(ind){ind.innerHTML='<span style="color:#27ae60">'+(fromCache?'数据已加载(本地缓存)':'数据已加载')+'</span>';setTimeout(function(){if(ind)ind.style.display='none';},1200);}
+    renderWatchlist();updateWatchlistBtn();
+}
+
+function fetchDataViaWorker(url,retryCount){
+    var ind=document.getElementById('loadIndicator');
+    if(ind)ind.innerHTML='<span style="color:#3498db">正在后台加载('+retryCount+'/3)...</span>';
+    var wc='self.onmessage=function(e){var u=e.data.url;var c=new AbortController();var t=setTimeout(function(){c.abort();},30000);fetch(u,{signal:c.signal}).then(function(r){clearTimeout(t);if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}).then(function(d){var codes=d.c,names=d.s,prices=d.p,n=d.n;var stocks={},nm={};for(var i=0;i<codes.length;i++){var cd=codes[i];nm[cd]=names[i];var sp=new Array(n);for(var j=0;j<n;j++){var p=prices[i*n+j];sp[j]=(p===0)?null:p/100;}stocks[cd]=sp;}self.postMessage({stocks:stocks,names:nm});}).catch(function(err){self.postMessage({error:err.message});});};';
+    var blob=new Blob([wc],{type:'application/javascript'});
+    var worker=new Worker(URL.createObjectURL(blob));
+    worker.onmessage=function(e){
+        worker.terminate();
+        if(e.data.error){
+            if(retryCount<3){if(ind)ind.innerHTML='<span style="color:#e67e22">加载失败,3秒后重试...</span>';setTimeout(function(){fetchDataViaWorker(url,retryCount+1);},3000);}
+            else{if(ind)ind.innerHTML='<span style="color:#e74c3c">数据加载失败,请刷新页面</span>';}
+            return;
+        }
+        onStockDataReady(e.data.stocks,e.data.names,false);
+        setCache('sd_'+DATA_VERSION,{stocks:e.data.stocks,names:e.data.names});
+    };
+    worker.onerror=function(){worker.terminate();if(retryCount<3){setTimeout(function(){fetchDataViaWorker(url,retryCount+1);},3000);}else{if(ind)ind.innerHTML='<span style="color:#e74c3c">数据加载失败,请刷新页面</span>';}};
+    worker.postMessage({url:url});
+}
+
+function loadAllStockData(){
+    var dataUrl=(window.location.hostname==='pq-hahaha.github.io')?'https://pq-hahaha.github.io/zt-board/breadth_stock_data.json':'breadth_stock_data.json';
+    var cacheKey='sd_'+DATA_VERSION;
+    getCache(cacheKey).then(function(cached){
+        if(cached&&cached.stocks){onStockDataReady(cached.stocks,cached.names,true);return;}
+        fetchDataViaWorker(dataUrl,1);
+    });
 }
 loadAllStockData();
 
