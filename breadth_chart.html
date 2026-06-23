@@ -88,7 +88,7 @@ var allStockData = {};
 var stockNames = {};
 var xLabels = ["06-12", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-15", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-16", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-17", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-18", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-22", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-23", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""];
 var advData = [null, null, 3354, 3354, 3354, 3451, 3451, 3451, 4246, 4246, 4246, 3988, 3988, 3988, 4124, 4124, 4124, 4212, 4212, 4212, 4121, 4121, 4121, 4073, 4073, 4073, 3994, 3994, 3994, 3899, 3899, 3899, 3820, 3820, 3820, 3476, 3476, 3476, 3502, 3502, 3502, 3479, 3479, 3479, 3384, 3384, 3384, 3552, null, null, 4186, 4186, 4186, 4017, 4017, 4017, 3914, 3914, 3914, 3491, 3491, 3491, 3364, 3364, 3364, 3257, 3257, 3257, 3198, 3198, 3198, 3033, 3033, 3033, 2820, 2820, 2820, 3136, 3136, 3136, 3314, 3314, 3314, 3172, 3172, 3172, 3220, 3220, 3220, 3220, 3220, 3220, 3330, 3330, 3330, 3522, null, null, 1117, 1117, 1117, 1397, 1397, 1397, 1508, 1508, 1508, 1741, 1741, 1741, 2310, 2310, 2310, 2232, 2232, 2232, 2439, 2439, 2439, 2411, 2411, 2411, 2825, 2825, 2825, 2373, 2373, 2373, 2071, 2071, 2071, 2259, 2259, 2259, 2377, 2377, 2377, 2470, 2470, 2470, 2384, 2384, 2384, 2487, null, null, 1186, 1186, 1186, 1367, 1367, 1367, 1669, 1669, 1669, 1389, 1389, 1389, 1257, 1257, 1257, 1318, 1318, 1318, 1302, 1302, 1302, 1283, 1283, 1283, 1228, 1228, 1228, 1322, 1322, 1322, 1424, 1424, 1424, 1321, 1321, 1321, 1275, 1275, 1275, 1313, 1313, 1313, 1458, 1458, 1458, 1543, null, null, 1407, 1407, 1407, 1968, 1968, 1968, 2364, 2364, 2364, 2530, 2530, 2530, 2070, 2070, 2070, 1797, 1797, 1797, 1681, 1681, 1681, 1794, 1794, 1794, 1764, 1764, 1764, 1949, 1949, 1949, 1731, 1731, 1731, 1854, 1854, 1854, 1846, 1846, 1846, 1873, 1873, 1873, 1944, 1944, 1944, 1880, null, null, 1133, 1133, 1133, 960, 960, 960, 914, 914, 914, 898, 898, 898, 1011, 1011, 1011, 920, 920, 920, 1023, 1023, 1023, 1150, 1150, 1150, 1435, 1435, 1435, 1470, 1470, 1470, 1439, 1439, 1439, 1804, 1804, 1804, 2362, 2362, 2362, 2256, 2256, 2256, 2461, 2461, 2461, 2632, null, null, 3189, 3189, 3189, 3311, 3311, 3311, 3365, 3365, 3365, 3387, 3387, 3387, 3401, 3401, 3401, 3199, 3199, 3199, 2996, 2996, 2996, 2970, 2970, 2970, 2950, 2950, 2950, 2820, 2820, 2820, 2976, 2976, 2976, 2591, 2591, 2591, 2519, 2519, 2519, 2046, 2046, 2046, 2268, 2268, 2268, 2409];
-var markAreaPairs = [[{"xAxis": 0}, {"xAxis": 11, "itemStyle": {"color": "rgba(220,0,0,0.75)"}}], [{"xAxis": 12}, {"xAxis": 23, "itemStyle": {"color": "rgba(220,0,0,0.75)"}}], [{"xAxis": 24}, {"xAxis": 35, "itemStyle": {"color": "rgba(255,100,100,0.65)"}}], [{"xAxis": 36}, {"xAxis": 47, "itemStyle": {"color": "rgba(255,100,100,0.65)"}}], [{"xAxis": 48}, {"xAxis": 59, "itemStyle": {"color": "rgba(255,100,100,0.65)"}}], [{"xAxis": 60}, {"xAxis": 71, "itemStyle": {"color": "rgba(255,100,100,0.65)"}}], [{"xAxis": 72}, {"xAxis": 83, "itemStyle": {"color": "rgba(255,100,100,0.65)"}}], [{"xAxis": 84}, {"xAxis": 95, "itemStyle": {"color": "rgba(255,100,100,0.65)"}}], [{"xAxis": 96}, {"xAxis": 107, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 108}, {"xAxis": 119, "itemStyle": {"color": "rgba(100,200,100,0.60)"}}], [{"xAxis": 120}, {"xAxis": 131, "itemStyle": {"color": "rgba(100,200,100,0.60)"}}], [{"xAxis": 132}, {"xAxis": 143, "itemStyle": {"color": "rgba(255,210,80,0.55)"}}], [{"xAxis": 144}, {"xAxis": 155, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 156}, {"xAxis": 167, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 168}, {"xAxis": 179, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 180}, {"xAxis": 191, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 192}, {"xAxis": 203, "itemStyle": {"color": "rgba(255,210,80,0.55)"}}], [{"xAxis": 204}, {"xAxis": 215, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 216}, {"xAxis": 227, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 228}, {"xAxis": 239, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 240}, {"xAxis": 251, "itemStyle": {"color": "rgba(0,100,0,0.82)"}}], [{"xAxis": 252}, {"xAxis": 263, "itemStyle": {"color": "rgba(0,100,0,0.82)"}}], [{"xAxis": 264}, {"xAxis": 275, "itemStyle": {"color": "rgba(0,130,0,0.75)"}}], [{"xAxis": 276}, {"xAxis": 287, "itemStyle": {"color": "rgba(255,160,140,0.60)"}}], [{"xAxis": 288}, {"xAxis": 299, "itemStyle": {"color": "rgba(255,100,100,0.65)"}}], [{"xAxis": 300}, {"xAxis": 311, "itemStyle": {"color": "rgba(255,160,140,0.60)"}}], [{"xAxis": 312}, {"xAxis": 323, "itemStyle": {"color": "rgba(255,160,140,0.60)"}}], [{"xAxis": 324}, {"xAxis": 335, "itemStyle": {"color": "rgba(100,200,100,0.60)"}}]];
+var markAreaPairs = [[{"xAxis": 0}, {"xAxis": 11, "itemStyle": {"color": "rgba(220,0,0,0.62)"}}], [{"xAxis": 12}, {"xAxis": 23, "itemStyle": {"color": "rgba(220,0,0,0.62)"}}], [{"xAxis": 24}, {"xAxis": 35, "itemStyle": {"color": "rgba(255,100,100,0.52)"}}], [{"xAxis": 36}, {"xAxis": 47, "itemStyle": {"color": "rgba(255,100,100,0.52)"}}], [{"xAxis": 48}, {"xAxis": 59, "itemStyle": {"color": "rgba(255,100,100,0.52)"}}], [{"xAxis": 60}, {"xAxis": 71, "itemStyle": {"color": "rgba(255,100,100,0.52)"}}], [{"xAxis": 72}, {"xAxis": 83, "itemStyle": {"color": "rgba(255,100,100,0.52)"}}], [{"xAxis": 84}, {"xAxis": 95, "itemStyle": {"color": "rgba(255,100,100,0.52)"}}], [{"xAxis": 96}, {"xAxis": 107, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 108}, {"xAxis": 119, "itemStyle": {"color": "rgba(100,200,100,0.48)"}}], [{"xAxis": 120}, {"xAxis": 131, "itemStyle": {"color": "rgba(100,200,100,0.48)"}}], [{"xAxis": 132}, {"xAxis": 143, "itemStyle": {"color": "rgba(255,210,80,0.45)"}}], [{"xAxis": 144}, {"xAxis": 155, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 156}, {"xAxis": 167, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 168}, {"xAxis": 179, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 180}, {"xAxis": 191, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 192}, {"xAxis": 203, "itemStyle": {"color": "rgba(255,210,80,0.45)"}}], [{"xAxis": 204}, {"xAxis": 215, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 216}, {"xAxis": 227, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 228}, {"xAxis": 239, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 240}, {"xAxis": 251, "itemStyle": {"color": "rgba(0,100,0,0.68)"}}], [{"xAxis": 252}, {"xAxis": 263, "itemStyle": {"color": "rgba(0,100,0,0.68)"}}], [{"xAxis": 264}, {"xAxis": 275, "itemStyle": {"color": "rgba(0,130,0,0.62)"}}], [{"xAxis": 276}, {"xAxis": 287, "itemStyle": {"color": "rgba(255,160,140,0.48)"}}], [{"xAxis": 288}, {"xAxis": 299, "itemStyle": {"color": "rgba(255,100,100,0.52)"}}], [{"xAxis": 300}, {"xAxis": 311, "itemStyle": {"color": "rgba(255,160,140,0.48)"}}], [{"xAxis": 312}, {"xAxis": 323, "itemStyle": {"color": "rgba(255,160,140,0.48)"}}], [{"xAxis": 324}, {"xAxis": 335, "itemStyle": {"color": "rgba(100,200,100,0.48)"}}]];
 var dayBoundaries = [0, 48, 96, 144, 192, 240, 288];
 var dayLineIndices = [48, 96, 144, 192, 240, 288];
 var hourLineIndices = [12, 24, 36, 60, 72, 84, 108, 120, 132, 156, 168, 180, 204, 216, 228, 252, 264, 276, 300, 312, 324];
@@ -99,15 +99,6 @@ var dataLoaded = false;
 var chart = echarts.init(document.getElementById('chart'));
 
 function buildOption(priceData) {
-    var markLineData = [];
-    // 日间实线
-    dayLineIndices.forEach(function(idx) {
-        markLineData.push([
-            {xAxis: idx},
-            {xAxis: idx}
-        ]);
-    });
-
     var option = {
         backgroundColor: '#fff',
         tooltip: {
@@ -224,12 +215,7 @@ function buildOption(priceData) {
                     silent: true,
                     data: markAreaPairs
                 },
-                markLine: {
-                    silent: true,
-                    symbol: 'none',
-                    lineStyle: {type: 'solid', color: '#e67e22', width: 2},
-                    data: markLineData
-                }
+                z: 3
             },
             {
                 name: '上涨家数',
@@ -249,7 +235,28 @@ function buildOption(priceData) {
 }
 
 chart.setOption(buildOption(currentPriceData));
-window.addEventListener('resize', function() { chart.resize(); });
+
+// 画日间分隔线(橙红色粗线)
+function drawDayLines() {
+    var grid = chart.getModel().getComponent('grid', 0);
+    var rect = grid.coordinateSystem.getRect();
+    var xScale = chart.getModel().getComponent('xAxis', 0).axis;
+    var graphicElements = [];
+    dayLineIndices.forEach(function(idx) {
+        var x = xScale.dataToCoord(idx);
+        graphicElements.push({
+            type: 'line',
+            shape: {x1: x, y1: rect.y, x2: x, y2: rect.y + rect.height},
+            style: {stroke: '#FF4500', lineWidth: 2.5, opacity: 0.85},
+            silent: true,
+            z: 50
+        });
+    });
+    chart.setOption({graphic: graphicElements});
+}
+setTimeout(drawDayLines, 100);
+
+window.addEventListener('resize', function() { chart.resize(); setTimeout(drawDayLines, 100); });
 
 // === IndexedDB 缓存 ===
 var DATA_VERSION = 'v1_20260623';
