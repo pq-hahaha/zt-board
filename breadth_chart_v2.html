@@ -440,36 +440,41 @@ function renderWatchlist() {
     // V2 basic scores (loaded via fetch)
     var basicScoresV2 = {};
     var basicScoresV2Loaded = false;
+    var basicScoresV2Loading = null;
     
     function loadBasicScoresV2() {
         if (basicScoresV2Loaded) return Promise.resolve();
+        if (basicScoresV2Loading) return basicScoresV2Loading;
         var url = (window.location.hostname === 'pq-hahaha.github.io') 
             ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json'
             : 'stock_basic_scores_v2.json';
-        return fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+        basicScoresV2Loading = fetch(url).then(function(r) { return r.json(); }).then(function(d) {
             basicScoresV2 = d;
             basicScoresV2Loaded = true;
-        }).catch(function(e) { console.warn('V2 scores load failed:', e); });
+            basicScoresV2Loading = null;
+        }).catch(function(e) { console.warn('V2 scores load failed:', e); basicScoresV2Loading = null; });
+        return basicScoresV2Loading;
     }
     
     function showBasicScoreV2(code) {
-        var el = document.getElementById('basicScore');
-        if (!el || !basicScoresV2[code]) {
-            if (el) el.innerHTML = '';
-            return;
-        }
-        var s = basicScoresV2[code];
-        var score = s.s;
-        var detail = s.d || '';
-        if (score > 0) {
-            el.innerHTML = '<span style="background:#e74c3c;color:#fff;padding:1px 8px;border-radius:3px;font-weight:bold;font-size:13px;">v2: ' + score + '分</span>'
-                + '<span style="color:#888;font-size:11px;margin-left:4px;">' + detail + '</span>';
-        } else {
-            el.innerHTML = '<span style="color:#ccc;font-size:12px;">v2: 0分</span>';
-        }
+        loadBasicScoresV2().then(function() {
+            var el = document.getElementById('basicScore');
+            if (!el || !basicScoresV2[code]) {
+                if (el) el.innerHTML = '';
+                return;
+            }
+            var s = basicScoresV2[code];
+            var score = s.s;
+            var detail = s.d || '';
+            if (score > 0) {
+                el.innerHTML = '<span style="background:#e74c3c;color:#fff;padding:1px 8px;border-radius:3px;font-weight:bold;font-size:13px;">v2: ' + score + '分</span>'
+                    + '<span style="color:#888;font-size:11px;margin-left:4px;">' + detail + '</span>';
+            } else {
+                el.innerHTML = '<span style="color:#ccc;font-size:12px;">v2: 0分</span>';
+            }
+        });
     }
     
-    // Load v2 scores in background (non-blocking)
     loadBasicScoresV2();
 
 </script>
