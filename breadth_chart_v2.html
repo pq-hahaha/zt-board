@@ -449,7 +449,7 @@ function renderWatchlist() {
             ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json'
             : 'stock_basic_scores_v2.json';
         basicScoresV2Loading = fetch(url).then(function(r) { return r.json(); }).then(function(d) {
-            basicScoresV2 = d;
+            basicScoresV2 = d.scores;
             basicScoresV2Loaded = true;
             basicScoresV2Loading = null;
         }).catch(function(e) { console.warn('V2 scores load failed:', e); basicScoresV2Loading = null; });
