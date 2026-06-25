@@ -316,6 +316,35 @@ function onFullDataReady(d) {
     if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
 }
 
+// 核心fetch+解析(带完整错误处理)
+function fetchAndParse(url, db, ind) {
+    if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
+    fetch(url).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+    }).then(function(txt) {
+        if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
+        setTimeout(function() {
+            try {
+                var d = JSON.parse(txt);
+                onFullDataReady(d);
+                // IDB缓存写入(非阻塞,失败不影响数据)
+                if (db) {
+                    idbPut(db, 'stock_' + STOCK_DATA_VERSION, d).catch(function(e) {
+                        console.warn('IDB cache write skipped:', e);
+                    });
+                }
+            } catch(e) {
+                console.error('JSON.parse failed:', e);
+                if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
+            }
+        }, 50);
+    }).catch(function(e) {
+        console.error('fetch failed:', e);
+        if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
+    });
+}
+
 function loadFullStockData() {
     var ind = document.getElementById('loadIndicator');
     if (ind) { ind.style.display = ''; ind.innerHTML = '<span style="color:#3498db">正在加载...</span>'; }
@@ -323,35 +352,22 @@ function loadFullStockData() {
     var url = getBaseUrl() + 'breadth_stock_data.json?v=' + STOCK_DATA_VERSION;
 
     openIDB().then(function(db) {
-        // 先查IDB缓存
-        return idbGet(db, 'stock_' + STOCK_DATA_VERSION).then(function(cached) {
+        idbGet(db, 'stock_' + STOCK_DATA_VERSION).then(function(cached) {
             if (cached) {
-                // 缓存命中 → 秒开,无JSON.parse
+                // 缓存命中 → 秒开
                 onFullDataReady(cached);
                 return;
             }
-            // 缓存miss → fetch下载
-            if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
-            fetch(url).then(function(r) { return r.text(); }).then(function(txt) {
-                // 下载完成 → setTimeout(50)延迟解析,UI先更新
-                if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
-                setTimeout(function() {
-                    var d = JSON.parse(txt);
-                    // 写IDB缓存(下次秒开)
-                    idbPut(db, 'stock_' + STOCK_DATA_VERSION, d);
-                    onFullDataReady(d);
-                }, 50);
-            });
+            // 缓存miss → fetch+解析
+            fetchAndParse(url, db, ind);
+        }).catch(function(e) {
+            console.warn('IDB read failed, fetch directly:', e);
+            fetchAndParse(url, null, ind);
         });
     }).catch(function(e) {
-        // IDB失败 → 直接fetch(兜底)
-        console.warn('IDB fallback:', e);
-        fetch(url).then(function(r) { return r.text(); }).then(function(txt) {
-            if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
-            setTimeout(function() {
-                onFullDataReady(JSON.parse(txt));
-            }, 50);
-        });
+        // IDB不可用 → 直接fetch(无缓存)
+        console.warn('IDB unavailable, fetch directly:', e);
+        fetchAndParse(url, null, ind);
     });
 }
 loadFullStockData();
