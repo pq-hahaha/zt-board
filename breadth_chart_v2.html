@@ -368,7 +368,8 @@ chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
 // === IndexedDB 缓存 ===
-var DATA_VERSION = 'v2_20260625';
+var STOCK_DATA_VERSION = 'v1_20260624';  // 股票数据版本(仅数据更新时改)
+var SCORE_DATA_VERSION = 'v2_20260625';  // 评分版本(评分更新时改)
 function openDB(){return new Promise(function(resolve,reject){var req=indexedDB.open('zt_board',1);req.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains('cache'))db.createObjectStore('cache',{keyPath:'key'});};req.onsuccess=function(e){resolve(e.target.result);};req.onerror=function(e){reject(e);};});}
 function getCache(key){return openDB().then(function(db){return new Promise(function(resolve){var tx=db.transaction('cache','readonly');var r=tx.objectStore('cache').get(key);r.onsuccess=function(){resolve(r.result?r.result.value:null);};r.onerror=function(){resolve(null);};});}).catch(function(){return null;});}
 function setCache(key,val){return openDB().then(function(db){return new Promise(function(resolve){var tx=db.transaction('cache','readwrite');tx.objectStore('cache').put({key:key,value:val});tx.oncomplete=function(){resolve();};tx.onerror=function(){resolve();};});}).catch(function(){});}
@@ -380,6 +381,10 @@ function onStockDataReady(stocks,names,fromCache){
     if(ind){ind.innerHTML='<span style="color:#27ae60">'+(fromCache?'数据已加载(本地缓存)':'数据已加载')+'</span>';setTimeout(function(){if(ind)ind.style.display='none';},1200);}
     renderWatchlist();updateWatchlistBtn();
 }
+
+// 页面加载时立即渲染观察池(不用等数据), 评分加载完后再刷新一次
+renderWatchlist();
+loadBasicScoresV2().then(function() { renderWatchlist(); });
 
 function parseCompactData(d){
     var codes=d.c,names=d.s,prices=d.p,n=d.n;
@@ -398,7 +403,7 @@ function parseCompactData(d){
 
 function loadAllStockData(){
     var dataUrl=(window.location.hostname==='pq-hahaha.github.io')?'https://pq-hahaha.github.io/zt-board/breadth_stock_data.json':'breadth_stock_data.json';
-    var cacheKey='sd_'+DATA_VERSION;
+    var cacheKey='sd_'+STOCK_DATA_VERSION;
     var ind=document.getElementById('loadIndicator');
     getCache(cacheKey).then(function(cached){
         if(cached&&cached.stocks){onStockDataReady(cached.stocks,cached.names,true);return;}
@@ -413,7 +418,7 @@ function loadAllStockData(){
                 setTimeout(function(){
                     var r=parseCompactData(d);
                     onStockDataReady(r.stocks,r.names,false);
-                    setCache('sd_'+DATA_VERSION,{stocks:r.stocks,names:r.names});
+                    setCache('sd_'+STOCK_DATA_VERSION,{stocks:r.stocks,names:r.names});
                 },50);
             })
             .catch(function(e){
@@ -566,8 +571,8 @@ function renderWatchlist() {
         if (basicScoresV2Loaded) return Promise.resolve();
         if (basicScoresV2Loading) return basicScoresV2Loading;
         var url = (window.location.hostname === 'pq-hahaha.github.io') 
-            ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json?v=' + DATA_VERSION
-            : 'stock_basic_scores_v2.json?v=' + DATA_VERSION;
+            ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json?v=' + SCORE_DATA_VERSION
+            : 'stock_basic_scores_v2.json?v=' + SCORE_DATA_VERSION;
         basicScoresV2Loading = fetch(url).then(function(r) { return r.json(); }).then(function(d) {
             basicScoresV2 = d.scores;
             basicScoresV2Loaded = true;
