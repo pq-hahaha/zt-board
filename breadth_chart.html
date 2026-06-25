@@ -272,90 +272,86 @@ function buildOption(priceData) {
 chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
-// === 分步加载策略 ===
-// 第1步: 加载轻量索引(~50KB gzip, 秒级) → 立即可搜索/显示观察池名称
-// 第2步: 后台异步加载完整数据(8MB原始, gzip 2.5MB) → 解析完个股可查看
-// 第3步: 加载评分数据(~100KB gzip) → 显示分数
+// === 数据加载: fetch + setTimeout(50)延迟解析 + IndexedDB缓存 ===
+// 首次: 下载2.4MB gzip → setTimeout(50) → JSON.parse → 写IDB → 2-3秒
+// 二次: IDB读已解析对象 → 秒开(无JSON.parse)
+// 慢的根因不是下载,是JSON.parse 9MB阻塞主线程; setTimeout让UI先更新"正在解析"
 
-// --- 第1步: 轻量索引(代码→名称映射) ---
-function loadStockIndex() {
-    fetch(getBaseUrl() + 'stock_index.json').then(function(r) { return r.json(); }).then(function(d) {
-        stockNames = d;
-        // 索引加载后刷新观察池(名称可用)
-        renderWatchlist();
-        updateWatchlistBtn();
-        var ind = document.getElementById('loadIndicator');
-        if (ind) { ind.innerHTML = '<span style="color:#27ae60">索引OK</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 800); }
-    }).catch(function(e) {
-        var ind = document.getElementById('loadIndicator');
-        if (ind) ind.innerHTML = '<span style="color:#e74c3c">索引加载失败,刷新重试</span>';
-        console.warn('Index load failed:', e);
+var STOCK_DATA_VERSION = 'v1_20260625';
+var pendingStockCode = '';
+
+function openIDB() {
+    return new Promise(function(resolve, reject) {
+        var req = indexedDB.open('zt_board_data', 1);
+        req.onupgradeneeded = function(e) { e.target.result.createObjectStore('data'); };
+        req.onsuccess = function(e) { resolve(e.target.result); };
+        req.onerror = function(e) { reject(e.target.error); };
     });
 }
-loadStockIndex();
+function idbGet(db, key) {
+    return new Promise(function(resolve, reject) {
+        var tx = db.transaction('data', 'readonly');
+        var req = tx.objectStore('data').get(key);
+        req.onsuccess = function(e) { resolve(e.target.result); };
+        req.onerror = function(e) { reject(e.target.error); };
+    });
+}
+function idbPut(db, key, val) {
+    return new Promise(function(resolve, reject) {
+        var tx = db.transaction('data', 'readwrite');
+        var req = tx.objectStore('data').put(val, key);
+        req.onsuccess = function() { resolve(); };
+        req.onerror = function(e) { reject(e.target.error); };
+    });
+}
 
-// --- 第2步: 完整数据(异步后台加载,带进度+pending回调) ---
-var STOCK_DATA_VERSION = 'v1_20260624';
-var pendingStockCode = '';  // 数据加载期间的待查看股票
+function onFullDataReady(d) {
+    allStockData = d.stocks;
+    if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
+    if (!allStockData['600519'] && currentPriceData) { allStockData['600519'] = currentPriceData; }
+    fullDataLoaded = true;
+    var ind = document.getElementById('loadIndicator');
+    if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
+    renderWatchlist();
+    if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
+}
 
 function loadFullStockData() {
     var ind = document.getElementById('loadIndicator');
-    if (ind) { ind.style.display = ''; ind.innerHTML = '<span style="color:#3498db">正在下载全市场数据...</span>'; }
+    if (ind) { ind.style.display = ''; ind.innerHTML = '<span style="color:#3498db">正在加载...</span>'; }
 
     var url = getBaseUrl() + 'breadth_stock_data.json?v=' + STOCK_DATA_VERSION;
 
-    // 用ReadableStream追踪下载进度
-    fetch(url).then(function(r) {
-        var total = parseInt(r.headers.get('content-length')) || 0;
-        if (!r.body || !total) {
-            // 无法追踪进度,直接读JSON
-            return r.json();
-        }
-        var loaded = 0;
-        var reader = r.body.getReader();
-        var chunks = [];
-        return new Promise(function(resolve, reject) {
-            function pump() {
-                reader.read().then(function(result) {
-                    if (result.done) {
-                        var blob = new Blob(chunks);
-                        resolve(blob.text().then(function(txt) { return JSON.parse(txt); }));
-                        return;
-                    }
-                    chunks.push(result.value);
-                    loaded += result.value.length;
-                    var pct = Math.min(Math.round(loaded / total * 100), 100);
-                    if (ind) ind.innerHTML = '<span style="color:#3498db">下载进度: ' + pct + '%</span>';
-                    pump();
-                }).catch(reject);
+    openIDB().then(function(db) {
+        // 先查IDB缓存
+        return idbGet(db, 'stock_' + STOCK_DATA_VERSION).then(function(cached) {
+            if (cached) {
+                // 缓存命中 → 秒开,无JSON.parse
+                onFullDataReady(cached);
+                return;
             }
-            pump();
+            // 缓存miss → fetch下载
+            if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
+            fetch(url).then(function(r) { return r.text(); }).then(function(txt) {
+                // 下载完成 → setTimeout(50)延迟解析,UI先更新
+                if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
+                setTimeout(function() {
+                    var d = JSON.parse(txt);
+                    // 写IDB缓存(下次秒开)
+                    idbPut(db, 'stock_' + STOCK_DATA_VERSION, d);
+                    onFullDataReady(d);
+                }, 50);
+            });
         });
-    }).then(function(d) {
-        // 原始JSON结构: {stocks: {code: [prices]}, names: {code: name}}
-        if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析数据...</span>';
-        allStockData = d.stocks;
-        // 补充名称(完整数据可能有更全的名称)
-        if (d.names) {
-            for (var code in d.names) {
-                if (!stockNames[code]) stockNames[code] = d.names[code];
-            }
-        }
-        // 确保默认股票(茅台)的数据仍在
-        if (!allStockData['600519'] && currentPriceData) {
-            allStockData['600519'] = currentPriceData;
-        }
-        fullDataLoaded = true;
-        if (ind) { ind.innerHTML = '<span style="color:#27ae60">数据就绪</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 600); }
-        // 完整数据加载后: 刷新观察池 + 渲染pending股票
-        renderWatchlist();
-        if (pendingStockCode) {
-            renderStockChart(pendingStockCode);
-            pendingStockCode = '';
-        }
     }).catch(function(e) {
-        if (ind) ind.innerHTML = '<span style="color:#e74c3c">数据加载失败,刷新重试</span>';
-        console.warn('Full data load failed:', e);
+        // IDB失败 → 直接fetch(兜底)
+        console.warn('IDB fallback:', e);
+        fetch(url).then(function(r) { return r.text(); }).then(function(txt) {
+            if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
+            setTimeout(function() {
+                onFullDataReady(JSON.parse(txt));
+            }, 50);
+        });
     });
 }
 loadFullStockData();
@@ -364,24 +360,14 @@ loadFullStockData();
 function loadStock() {
     var code = document.getElementById('stockCode').value.trim();
     if (!code) return;
-
     showBasicScoreV2(code);
-
-    // 数据已在内存 → 直接渲染
-    if (allStockData[code]) {
-        renderStockChart(code);
-        return;
-    }
-
-    // 完整数据还没加载完 → 设pending,数据就绪后自动渲染
+    if (allStockData[code]) { renderStockChart(code); return; }
     if (!fullDataLoaded) {
         pendingStockCode = code;
         var name = stockNames[code] || code;
-        document.getElementById('stockName').innerHTML = name + '(' + code + ') <span style="color:#e67e22;font-size:11px;">等待数据加载...</span>';
+        document.getElementById('stockName').innerHTML = name + '(' + code + ') <span style="color:#e67e22;font-size:11px;">等待数据...</span>';
         return;
     }
-
-    // 完整数据加载完了但找不到此代码
     document.getElementById('stockName').innerHTML = '<span style="color:#e74c3c">未找到: ' + code + '</span>';
 }
 
