@@ -13,7 +13,7 @@
 body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-serif; padding: 10px; }
 .header { text-align: center; margin-bottom: 8px; }
 .header h1 { font-size: 20px; color: #c0392b; }
-.control-bar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0; }
+.control-bar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
 .control-bar input {
     padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
     font-size: 14px; width: 130px; outline: none;
@@ -24,6 +24,7 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
     border-radius: 4px; cursor: pointer; font-size: 14px;
 }
 .control-bar button:hover { background: #2980b9; }
+.control-bar button:disabled { background: #aaa; cursor: default; }
 #stockName { font-size: 14px; color: #555; margin-left: 6px; }
 .legend-bar { display: flex; justify-content: center; gap: 18px; margin: 6px 0; flex-wrap: wrap; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #666; }
@@ -89,7 +90,7 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
     </div>
 </div>
 <div id="chart"></div>
-<div class="info">红线: 个股5分钟收盘价(左轴) | 蓝线: 全市场上涨家数(右轴) | 底色: 4时段赚钱效应</div>
+<div class="info">红线: 个股5分钟收盘价(左轴) | 蓺线: 全市场上涨家数(右轴) | 底色: 4时段赚钱效应</div>
 
 <script>
 // === 嵌入图表数据 (update_pages.py替换) ===
@@ -103,14 +104,10 @@ var dateLabels = ["06-15", "06-16", "06-17", "06-18", "06-22", "06-23", "06-24"]
 var currentPriceData = [1278.45, 1278.44, 1280.36, 1280.87, 1283.89, 1280.48, 1280.4, 1276.59, 1275.58, 1274.44, 1273.44, 1274.49, 1272.21, 1271.07, 1273.48, 1274.5, 1273.65, 1272.54, 1271.5, 1271.88, 1270.54, 1270.5, 1270.52, 1272.13, 1270.56, 1270.16, 1270.17, 1270.8, 1270.46, 1270.47, 1270.2, 1272.41, 1271.77, 1271.17, 1270.85, 1270.59, 1271.19, 1270.84, 1270.61, 1270.77, 1270.51, 1270.52, 1270.58, 1270.47, 1270.81, 1271.06, 1271.16, 1271.1, 1263.13, 1262.11, 1261.84, 1260.23, 1259.0, 1259.06, 1258.63, 1259.04, 1258.2, 1258.36, 1258.43, 1258.42, 1258.61, 1258.04, 1259.45, 1258.11, 1258.13, 1258.22, 1258.07, 1258.44, 1258.01, 1258.14, 1258.0, 1256.02, 1255.27, 1255.23, 1255.19, 1256.01, 1255.58, 1256.33, 1255.8, 1255.61, 1255.34, 1255.18, 1255.04, 1255.04, 1255.05, 1255.11, 1255.5, 1255.28, 1255.29, 1255.24, 1255.35, 1255.4, 1255.41, 1255.4, 1255.5, 1255.67, 1257.71, 1252.5, 1253.0, 1251.0, 1250.3, 1251.98, 1251.01, 1250.52, 1251.0, 1250.27, 1250.12, 1250.22, 1249.11, 1247.0, 1244.99, 1242.7, 1242.01, 1242.6, 1240.13, 1239.39, 1240.04, 1245.07, 1242.1, 1240.92, 1249.6, 1245.84, 1242.46, 1241.2, 1241.2, 1242.78, 1240.01, 1241.07, 1239.93, 1240.88, 1241.0, 1240.46, 1240.34, 1240.57, 1240.41, 1240.38, 1240.09, 1239.96, 1239.9, 1240.28, 1240.02, 1240.05, 1241.0, 1240.0, 1231.0, 1227.34, 1223.89, 1222.02, 1221.19, 1225.0, 1231.88, 1229.34, 1225.15, 1225.5, 1229.43, 1227.0, 1223.07, 1222.02, 1222.84, 1222.04, 1221.9, 1222.0, 1221.02, 1220.73, 1221.15, 1220.14, 1220.4, 1221.4, 1215.33, 1215.85, 1215.45, 1215.79, 1213.89, 1214.3, 1216.44, 1213.8, 1213.15, 1213.11, 1213.69, 1214.07, 1212.16, 1212.53, 1212.0, 1214.75, 1214.93, 1215.9, 1214.51, 1215.82, 1216.99, 1217.38, 1222.55, 1215.0, 1217.1, 1218.74, 1220.0, 1222.52, 1222.68, 1225.6, 1219.11, 1222.31, 1221.49, 1222.55, 1222.49, 1222.28, 1222.93, 1222.3, 1225.01, 1226.06, 1229.89, 1232.54, 1227.88, 1228.5, 1229.7, 1226.0, 1225.12, 1227.01, 1224.85, 1223.58, 1231.6, 1235.69, 1242.8, 1250.0, 1241.66, 1242.86, 1241.3, 1237.06, 1240.23, 1240.0, 1245.89, 1248.91, 1248.0, 1245.04, 1243.9, 1243.74, 1243.17, 1241.15, 1242.0, 1241.32, 1241.89, 1241.41, 1258.24, 1249.9, 1258.9, 1260.99, 1255.0, 1255.38, 1248.53, 1246.97, 1240.05, 1237.8, 1233.0, 1230.06, 1228.96, 1231.65, 1227.77, 1228.21, 1230.0, 1228.02, 1227.5, 1227.03, 1228.61, 1229.84, 1231.76, 1228.61, 1227.01, 1229.09, 1228.96, 1227.01, 1226.4, 1226.41, 1226.0, 1224.02, 1223.12, 1221.8, 1222.0, 1220.57, 1219.51, 1219.42, 1220.76, 1219.66, 1220.4, 1219.54, 1218.77, 1218.99, 1220.93, 1221.65, 1222.06, 1222.45, 1226.69, 1236.99, 1237.82, 1234.8, 1226.09, 1222.3, 1218.74, 1218.5, 1216.61, 1212.92, 1209.65, 1211.98, 1211.11, 1210.91, 1211.08, 1213.34, 1213.92, 1217.2, 1217.0, 1217.08, 1216.0, 1215.37, 1214.76, 1216.06, 1213.7, 1211.81, 1211.66, 1210.47, 1210.1, 1209.62, 1208.22, 1209.23, 1209.25, 1208.65, 1208.98, 1208.89, 1208.79, 1207.7, 1207.78, 1207.6, 1207.73, 1208.87, 1208.08, 1207.81, 1207.91, 1207.96, 1207.98, 1207.68];
 
 // === 全局状态 ===
-var allStockData = {};      // 个股价格数据(按需从chunk加载)
-var stockNames = {};        // 股票名称(从索引加载)
-var chunkMap = {};          // 代码→chunk编号(从索引加载)
-var loadedChunks = {};      // 已加载的chunk(内存缓存)
-var indexLoaded = false;    // 索引是否已加载
-var NUM_CHUNKS = 25;        // chunk总数(update_pages.py更新)
-
-var basicScoresV2 = {};
+var allStockData = {};          // 个股价格数据(从完整JSON加载)
+var stockNames = {};            // 股票名称(从索引加载)
+var fullDataLoaded = false;     // 完整数据是否已加载
+var basicScoresV2 = {};         // V2评分数据
 var basicScoresV2Loaded = false;
 var basicScoresV2Loading = null;
 
@@ -123,12 +120,15 @@ var pinyinLoaded = false;
 var searchSelectedIdx = -1;
 var searchResults = [];
 
+function getBaseUrl() {
+    return (window.location.hostname === 'pq-hahaha.github.io')
+        ? 'https://pq-hahaha.github.io/zt-board/'
+        : '';
+}
+
 function loadPinyinMap() {
     if (pinyinLoaded) return;
-    var url = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/pinyin_initials.json'
-        : 'pinyin_initials.json';
-    fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+    fetch(getBaseUrl() + 'pinyin_initials.json').then(function(r) { return r.json(); }).then(function(d) {
         pinyinMap = d;
         pinyinLoaded = true;
     }).catch(function(e) { console.warn('pinyin map load failed', e); });
@@ -139,12 +139,12 @@ function onSearchInput() {
     updateWatchlistBtn();
     var val = document.getElementById('stockCode').value.trim().toLowerCase();
     var dd = document.getElementById('searchDropdown');
-    if (!val || (!pinyinLoaded && !indexLoaded)) { dd.style.display = 'none'; return; }
-    if (/^\d+$/.test(val)) { dd.style.display = 'none'; return; }
+    if (!val) { dd.style.display = 'none'; return; }
+    if (/^\d+$/.test(val) && val.length <= 6) { dd.style.display = 'none'; return; }
 
     searchResults = [];
-    var sourceMap = pinyinLoaded ? pinyinMap : (indexLoaded ? chunkMap : {});
-    for (var code in sourceMap) {
+    // 搜索源: 拼音映射(最全) 或 索引(名称) 或 完整数据(名称)
+    for (var code in (pinyinLoaded ? pinyinMap : stockNames)) {
         var py = (pinyinMap[code] || '').toLowerCase();
         var name = stockNames[code] || '';
         if (py.indexOf(val) === 0 || name.indexOf(val) >= 0) {
@@ -272,21 +272,20 @@ function buildOption(priceData) {
 chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
-// === 懒加载: 股票索引(轻量,~15KB gzip,即刻加载) ===
+// === 分步加载策略 ===
+// 第1步: 加载轻量索引(~50KB gzip, 秒级) → 立即可搜索/显示观察池名称
+// 第2步: 后台异步加载完整数据(8MB原始, gzip 2.5MB) → 解析完个股可查看
+// 第3步: 加载评分数据(~100KB gzip) → 显示分数
+
+// --- 第1步: 轻量索引(代码→名称映射) ---
 function loadStockIndex() {
-    var url = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/stock_index.json'
-        : 'stock_index.json';
-    fetch(url).then(function(r) { return r.json(); }).then(function(d) {
-        stockNames = d.names;
-        chunkMap = d.chunks;
-        NUM_CHUNKS = d.num_chunks || 25;
-        indexLoaded = true;
-        var ind = document.getElementById('loadIndicator');
-        if (ind) { ind.innerHTML = '<span style="color:#27ae60">索引已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 800); }
-        // 索引加载后刷新观察池(名称可用)和按钮状态
+    fetch(getBaseUrl() + 'stock_index.json').then(function(r) { return r.json(); }).then(function(d) {
+        stockNames = d;
+        // 索引加载后刷新观察池(名称可用)
         renderWatchlist();
         updateWatchlistBtn();
+        var ind = document.getElementById('loadIndicator');
+        if (ind) { ind.innerHTML = '<span style="color:#27ae60">索引OK</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 800); }
     }).catch(function(e) {
         var ind = document.getElementById('loadIndicator');
         if (ind) ind.innerHTML = '<span style="color:#e74c3c">索引加载失败,刷新重试</span>';
@@ -295,32 +294,38 @@ function loadStockIndex() {
 }
 loadStockIndex();
 
-// === 懒加载: 数据chunk(按需加载,~100KB gzip/chunk) ===
-function loadStockChunk(chunkId) {
-    if (loadedChunks[chunkId]) return Promise.resolve(loadedChunks[chunkId]);
-    var url = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/chunks/sd_chunk_' + chunkId + '.json'
-        : 'chunks/sd_chunk_' + chunkId + '.json';
-    return fetch(url).then(function(r) { return r.json(); }).then(function(d) {
-        var n = d.n;
-        for (var i = 0; i < d.c.length; i++) {
-            var code = d.c[i];
-            var prices = [];
-            for (var j = 0; j < n; j++) {
-                var p = d.p[i * n + j];
-                prices.push(p === 0 ? null : p / 100);
+// --- 第2步: 完整数据(异步后台加载,不阻塞页面) ---
+var STOCK_DATA_VERSION = 'v1_20260624';
+
+function loadFullStockData() {
+    var ind = document.getElementById('loadIndicator');
+    if (ind) { ind.style.display = ''; ind.innerHTML = '<span style="color:#3498db">正在加载全市场数据...</span>'; }
+
+    fetch(getBaseUrl() + 'breadth_stock_data.json?v=' + STOCK_DATA_VERSION).then(function(r) { return r.json(); }).then(function(d) {
+        // 原始JSON结构: {stocks: {code: [prices]}, names: {code: name}}
+        allStockData = d.stocks;
+        // 补充名称(完整数据可能有更全的名称)
+        if (d.names) {
+            for (var code in d.names) {
+                if (!stockNames[code]) stockNames[code] = d.names[code];
             }
-            allStockData[code] = prices;
         }
-        loadedChunks[chunkId] = true;
-        return true;
+        // 确保默认股票(茅台)的数据仍在
+        if (!allStockData['600519'] && currentPriceData) {
+            allStockData['600519'] = currentPriceData;
+        }
+        fullDataLoaded = true;
+        if (ind) { ind.innerHTML = '<span style="color:#27ae60">数据加载完成</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 800); }
+        // 完整数据加载后刷新观察池
+        renderWatchlist();
     }).catch(function(e) {
-        console.warn('Chunk ' + chunkId + ' load failed:', e);
-        return false;
+        if (ind) ind.innerHTML = '<span style="color:#e74c3c">数据加载失败,刷新重试</span>';
+        console.warn('Full data load failed:', e);
     });
 }
+loadFullStockData();
 
-// === 个股查看(懒加载版) ===
+// --- 个股查看 ---
 function loadStock() {
     var code = document.getElementById('stockCode').value.trim();
     if (!code) return;
@@ -333,30 +338,14 @@ function loadStock() {
         return;
     }
 
-    // 索引未加载 → 等待
-    if (!indexLoaded) {
-        document.getElementById('stockName').innerHTML = '<span style="color:#e67e22">索引加载中...</span>';
+    // 完整数据还没加载完
+    if (!fullDataLoaded) {
+        document.getElementById('stockName').innerHTML = '<span style="color:#e67e22">数据加载中...</span>';
         return;
     }
 
-    // 索引中不存在此代码
-    if (!chunkMap.hasOwnProperty(code)) {
-        document.getElementById('stockName').innerHTML = '<span style="color:#e74c3c">未找到: ' + code + '</span>';
-        return;
-    }
-
-    // 按需加载chunk
-    var ind = document.getElementById('loadIndicator');
-    if (ind) { ind.style.display = ''; ind.innerHTML = '<span style="color:#3498db">正在加载个股数据...</span>'; }
-
-    loadStockChunk(chunkMap[code]).then(function(success) {
-        if (ind) { ind.style.display = 'none'; }
-        if (success && allStockData[code]) {
-            renderStockChart(code);
-        } else {
-            document.getElementById('stockName').innerHTML = '<span style="color:#e74c3c">数据加载失败</span>';
-        }
-    });
+    // 完整数据加载完了但找不到此代码
+    document.getElementById('stockName').innerHTML = '<span style="color:#e74c3c">未找到: ' + code + '</span>';
 }
 
 function renderStockChart(code) {
@@ -400,8 +389,6 @@ function saveWatchlist(list) {
 function addToWatchlist() {
     var code = document.getElementById('stockCode').value.trim();
     if (!code) return;
-    // 索引未加载时不允许添加(无法获取名称)
-    if (!indexLoaded && !stockNames[code]) return;
     var list = getWatchlist();
     if (list.length >= WL_MAX) return;
     for (var i = 0; i < list.length; i++) { if (list[i].code === code) return; }
@@ -464,8 +451,6 @@ function updateWatchlistBtn() {
         btn.disabled = true; btn.textContent = '池满'; btn.style.background = '#aaa';
     } else if (exists) {
         btn.disabled = true; btn.textContent = '已在池中'; btn.style.background = '#aaa';
-    } else if (!indexLoaded || !stockNames[code]) {
-        btn.disabled = true; btn.textContent = '入观察池'; btn.style.background = '#aaa';
     } else {
         btn.disabled = false; btn.textContent = '入观察池'; btn.style.background = '#27ae60';
     }
@@ -514,13 +499,12 @@ var SCORE_DATA_VERSION = 'v2_20260625';
 function loadBasicScoresV2() {
     if (basicScoresV2Loaded) return Promise.resolve();
     if (basicScoresV2Loading) return basicScoresV2Loading;
-    var url = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json?v=' + SCORE_DATA_VERSION
-        : 'stock_basic_scores_v2.json?v=' + SCORE_DATA_VERSION;
-    basicScoresV2Loading = fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+    basicScoresV2Loading = fetch(getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_DATA_VERSION).then(function(r) { return r.json(); }).then(function(d) {
         basicScoresV2 = d.scores;
         basicScoresV2Loaded = true;
         basicScoresV2Loading = null;
+        // 评分加载后刷新观察池(分数显示)
+        renderWatchlist();
     }).catch(function(e) { console.warn('V2 scores load failed:', e); basicScoresV2Loading = null; });
     return basicScoresV2Loading;
 }
@@ -543,9 +527,8 @@ function showBasicScoreV2(code) {
 // === 页面初始化 ===
 // 观察池立即渲染(用localStorage数据,不等索引)
 renderWatchlist();
-// 索引加载后刷新观察池(名称更新)
 // 评分加载后刷新观察池(分数显示)
-loadBasicScoresV2().then(function() { renderWatchlist(); });
+loadBasicScoresV2();
 
 </script>
 </body>
