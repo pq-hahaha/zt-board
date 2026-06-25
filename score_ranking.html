@@ -34,6 +34,10 @@ tbody tr:hover { background: #fef5f5; }
 tbody tr.watched { background: #fff8dc !important; }
 tbody tr.watched td { font-weight: 600; }
 tbody tr.watched:hover { background: #ffefd5 !important; }
+/* 低分关注行 - 淡金色,区分于>=10分 */
+tbody tr.watched-low { background: #fffbe6 !important; }
+tbody tr.watched-low td { font-weight: 500; color: #777; }
+tbody tr.watched-low:hover { background: #fff3d0 !important; }
 tbody td { padding: 7px 6px; text-align: center; font-size: 14px; }
 /* 排名列 */
 .td-rank { font-weight: bold; color: #999; font-size: 13px; width: 45px; }
@@ -46,9 +50,11 @@ tbody td { padding: 7px 6px; text-align: center; font-size: 14px; }
 .score-high { color: #e74c3c; }
 .score-mid { color: #e67e22; }
 .score-low { color: #3498db; }
+.score-under10 { color: #999; font-size: 13px; }
 /* 子分列 */
 .sub-score { font-size: 13px; color: #777; }
 .sub-r3 { color: #27ae60; }
+.sub-score-low { font-size: 13px; color: #bbb; }
 /* 关注按钮列 */
 .td-follow { width: 60px; }
 .btn-follow { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #555; transition: all 0.15s; }
@@ -97,11 +103,12 @@ tbody td { padding: 7px 6px; text-align: center; font-size: 14px; }
 </div>
 
 <script>
-var allData = [];
+var allData = [];       // >=10分的排行数据
+var followedLowData = []; // <10分但被关注的数据
 var nameMap = {};
 var pinyinMap = {};
 var currentSort = 'score'; // 'score', 'rank', 'follow'
-var sortDirection = 'desc'; // desc = 从高到低
+var sortDirection = 'desc';
 
 // === 关注列表(localStorage, 独立key, 含时间戳) ===
 var FK_KEY = 'score_rank_follow';
@@ -146,14 +153,15 @@ function toggleFollow(code) {
         }
     }
     if (!found) {
-        // 新关注, 记录时间戳(用于排序)
         list.push({ code: code, time: Date.now() });
     }
     saveFollowList(list);
+    // 重新构建数据(关注状态变了,<10分的可能新加入)
+    rebuildDisplayData();
     renderTable();
 }
 
-// === 列头排序点击 ===
+// === 列头排序 ===
 document.getElementById('thRank').addEventListener('click', function() {
     if (currentSort === 'rank') { sortDirection = sortDirection === 'desc' ? 'asc' : 'desc'; }
     else { currentSort = 'rank'; sortDirection = 'asc'; }
@@ -168,18 +176,14 @@ document.getElementById('thScore').addEventListener('click', function() {
 });
 document.getElementById('thFollow').addEventListener('click', function() {
     if (currentSort === 'follow') { sortDirection = sortDirection === 'desc' ? 'asc' : 'desc'; }
-    else { currentSort = 'follow'; sortDirection = 'desc'; } // 默认关注在前
+    else { currentSort = 'follow'; sortDirection = 'desc'; }
     updateSortIndicators();
     renderTable();
 });
 
 function updateSortIndicators() {
-    // 清除所有排序样式
     var ths = document.querySelectorAll('thead th.sortable');
-    for (var i = 0; i < ths.length; i++) {
-        ths[i].classList.remove('sort-asc', 'sort-desc');
-    }
-    // 设置当前排序样式
+    for (var i = 0; i < ths.length; i++) { ths[i].classList.remove('sort-asc', 'sort-desc'); }
     var activeTh = document.querySelector('thead th[data-sort="' + currentSort + '"]');
     if (activeTh) { activeTh.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc'); }
 }
@@ -189,7 +193,6 @@ function getBaseUrl() {
     if (window.location.hostname === 'pq-hahaha.github.io') {
         return 'https://pq-hahaha.github.io/zt-board/';
     }
-    // 本地file://或localhost → 相对路径
     return '';
 }
 
@@ -199,121 +202,198 @@ function loadData() {
     var poolUrl = getBaseUrl() + 'stock_pool.json';
     var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
 
-    Promise.all([
-        fetch(scoreUrl).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
-        fetch(poolUrl).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
-        fetch(pinyinUrl).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).catch(function() { return {}; })
-    ]).then(function(results) {
+    // 评分数据(必须), pool(名称映射,可缺), pinyin(搜索,可缺)
+    var scorePromise = fetch(scoreUrl).then(function(r) {
+        if (!r.ok) throw new Error('scores HTTP ' + r.status);
+        return r.json();
+    });
+    var poolPromise = fetch(poolUrl).then(function(r) {
+        if (!r.ok) return null; // pool不存在不崩溃,用其他来源补名称
+        return r.json();
+    }).catch(function() { return null; });
+    var pinyinPromise = fetch(pinyinUrl).then(function(r) {
+        if (!r.ok) return {};
+        return r.json();
+    }).catch(function() { return {}; });
+
+    Promise.all([scorePromise, poolPromise, pinyinPromise]).then(function(results) {
         var scoreData = results[0];
         var poolData = results[1];
         var pinyinData = results[2] || {};
 
-        for (var i = 0; i < poolData.length; i++) {
-            var code = poolData[i].code.split('.')[0];
-            nameMap[code] = poolData[i].name;
+        // 名称映射: pool优先 > pinyin > 评分数据detail提取
+        if (poolData) {
+            for (var i = 0; i < poolData.length; i++) {
+                var code = poolData[i].code.split('.')[0];
+                nameMap[code] = poolData[i].name;
+            }
         }
         pinyinMap = pinyinData;
 
         var scores = scoreData.scores;
-        allData = [];
+        // 遍历所有评分, 提取名称(从detail或用code)
         for (var code in scores) {
-            var s = scores[code];
-            if (s.s >= 10) {
-                allData.push({
-                    code: code,
-                    name: nameMap[code] || code,
-                    pinyin: pinyinMap[code] || '',
-                    score: s.s,
-                    r1: s.r1 || 0,
-                    r2: s.r2 || 0,
-                    r3: s.r3 || 0,
-                    detail: s.d || ''
-                });
+            if (!nameMap[code]) {
+                // 尝试从评分detail中提取名称(如有)
+                nameMap[code] = code;
             }
         }
 
-        // 默认按总分从高到低
-        allData.sort(function(a, b) { return b.score - a.score; });
+        // 构建显示数据: >=10分 + 关注的<10分
+        rebuildDisplayDataFromScores(scores, scoreData);
 
-        document.getElementById('dateInfo').textContent =
-            '数据日期: ' + scoreData.date + ' | 有效得分: ' + scoreData.scored + ' | 展示>=10分: ' + allData.length + '只';
-
-        updateSortIndicators();
-        renderTable();
     }).catch(function(e) {
         document.getElementById('rankBody').innerHTML =
             '<tr><td colspan="9" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
     });
 }
 
+// 从评分数据构建显示列表
+function rebuildDisplayDataFromScores(scores, scoreData) {
+    allData = [];
+    followedLowData = [];
+    var followList = getFollowList();
+    var followedCodes = {};
+    for (var i = 0; i < followList.length; i++) { followedCodes[followList[i].code] = true; }
+
+    for (var code in scores) {
+        var s = scores[code];
+        var item = {
+            code: code,
+            name: nameMap[code] || code,
+            pinyin: pinyinMap[code] || '',
+            score: s.s,
+            r1: s.r1 || 0,
+            r2: s.r2 || 0,
+            r3: s.r3 || 0,
+            detail: s.d || '',
+            under10: s.s < 10
+        };
+
+        if (s.s >= 10) {
+            allData.push(item);
+        } else if (followedCodes[code]) {
+            // <10分但被关注, 也加入显示
+            followedLowData.push(item);
+        }
+    }
+
+    // >=10分默认按总分从高到低
+    allData.sort(function(a, b) { return b.score - a.score; });
+
+    document.getElementById('dateInfo').textContent =
+        '数据日期: ' + scoreData.date + ' | >=10分: ' + allData.length + '只 | 关注<10分: ' + followedLowData.length + '只';
+
+    updateSortIndicators();
+    renderTable();
+}
+
+// 关注状态变了时重建数据
+function rebuildDisplayData() {
+    // 需要从allData和followedLowData重新分配
+    var combined = allData.concat(followedLowData);
+    allData = [];
+    followedLowData = [];
+    var followList = getFollowList();
+    var followedCodes = {};
+    for (var i = 0; i < followList.length; i++) { followedCodes[followList[i].code] = true; }
+
+    for (var j = 0; j < combined.length; j++) {
+        var item = combined[j];
+        if (item.score >= 10) {
+            allData.push(item);
+        } else if (followedCodes[item.code]) {
+            followedLowData.push(item);
+        }
+        // <10且不关注的不显示
+    }
+
+    allData.sort(function(a, b) { return b.score - a.score; });
+}
+
 // === 渲染表格 ===
 function renderTable() {
     var filter = document.getElementById('filterInput').value.trim().toLowerCase();
-
-    // 先根据排序方式排序allData
-    var sortedData = allData.slice(); // 浅拷贝
     var followList = getFollowList();
 
+    // 合并显示数据: >=10分 + 关注的<10分
+    var displayData = allData.concat(followedLowData);
+
+    // 排序
     if (currentSort === 'score') {
-        sortedData.sort(function(a, b) {
+        displayData.sort(function(a, b) {
+            // >=10分排前面, <10分关注排后面, 同区间内按分数
+            if (!a.under10 && b.under10) return -1;
+            if (a.under10 && !b.under10) return 1;
             return sortDirection === 'desc' ? b.score - a.score : a.score - b.score;
         });
     } else if (currentSort === 'rank') {
-        // 排名本质就是score排序
-        sortedData.sort(function(a, b) {
+        displayData.sort(function(a, b) {
+            if (!a.under10 && b.under10) return -1;
+            if (a.under10 && !b.under10) return 1;
             return sortDirection === 'asc' ? b.score - a.score : a.score - b.score;
         });
     } else if (currentSort === 'follow') {
-        // 关注状态排序: 关注的在前(按关注时间早晚), 未关注在后(按分数高低)
-        sortedData.sort(function(a, b) {
+        displayData.sort(function(a, b) {
             var aFollowed = isFollowed(a.code);
             var bFollowed = isFollowed(b.code);
             if (aFollowed && !bFollowed) return -1;
             if (!aFollowed && bFollowed) return 1;
             if (aFollowed && bFollowed) {
-                // 都是关注状态, 按关注时间排序
                 var aTime = getFollowTime(a.code);
                 var bTime = getFollowTime(b.code);
                 return sortDirection === 'desc' ? aTime - bTime : bTime - aTime;
-                // desc: 关注时间早的在前, asc: 关注时间晚的在前
             }
-            // 都不是关注状态, 按分数排
+            // 都不关注: >=10分按分数, <10分按分数
+            if (!a.under10 && b.under10) return -1;
+            if (a.under10 && !b.under10) return 1;
             return b.score - a.score;
         });
     }
 
     // 过滤
-    var filtered = sortedData;
+    var filtered = displayData;
     if (filter) {
-        filtered = sortedData.filter(function(item) {
+        filtered = displayData.filter(function(item) {
             return item.code.indexOf(filter) >= 0 ||
                    item.name.toLowerCase().indexOf(filter) >= 0 ||
                    item.pinyin.indexOf(filter) >= 0;
         });
     }
 
-    document.getElementById('countInfo').textContent = '显示 ' + filtered.length + '/' + allData.length + '只 | 关注 ' + followList.length + '只';
+    var totalShown = allData.length;
+    var followLowCount = followedLowData.length;
+    document.getElementById('countInfo').textContent =
+        '>=10分: ' + totalShown + '只 | 关注<10分: ' + followLowCount + '只 | 显示 ' + filtered.length + '只';
 
     var html = '';
+    var rankCounter = 0; // 只给>=10分的编号
     for (var i = 0; i < filtered.length; i++) {
         var item = filtered[i];
-        var rank = i + 1;
         var followed = isFollowed(item.code);
-        var scoreClass = item.score >= 25 ? 'score-high' : (item.score >= 15 ? 'score-mid' : 'score-low');
+        var isLow = item.under10;
+
+        // 排名: >=10分有排名号, <10分关注的显示"--"
+        if (!isLow) { rankCounter++; }
+        var rank = isLow ? '--' : rankCounter;
+
+        var scoreClass = isLow ? 'score-under10' :
+                         (item.score >= 25 ? 'score-high' : (item.score >= 15 ? 'score-mid' : 'score-low'));
         var r3Display = item.r3 > 0 ? '-' + item.r3 : '0';
-        var rowClass = followed ? ' watched' : '';
+        var rowClass = followed ? (isLow ? 'watched-low' : 'watched') : '';
         var btnClass = followed ? ' active' : '';
         var btnText = followed ? '已关注' : '关注';
         var statusHtml = followed ? '<span class="status-yes">是</span>' : '<span class="status-no">否</span>';
+        var subClass = isLow ? 'sub-score-low' : 'sub-score';
 
         html += '<tr class="' + rowClass + '">';
         html += '<td class="td-rank">' + rank + '</td>';
         html += '<td class="td-code">' + item.code + '</td>';
         html += '<td class="td-name">' + item.name + '</td>';
         html += '<td class="score-total ' + scoreClass + '">' + item.score + '</td>';
-        html += '<td class="sub-score">' + item.r1 + '</td>';
-        html += '<td class="sub-score">' + (item.r2 % 1 === 0 ? item.r2 : item.r2.toFixed(1)) + '</td>';
-        html += '<td class="sub-score sub-r3">' + r3Display + '</td>';
+        html += '<td class="' + subClass + '">' + item.r1 + '</td>';
+        html += '<td class="' + subClass + '">' + (item.r2 % 1 === 0 ? item.r2 : item.r2.toFixed(1)) + '</td>';
+        html += '<td class="' + subClass + (item.r3 > 0 ? ' sub-r3' : '') + '">' + r3Display + '</td>';
         html += '<td class="td-follow"><span class="btn-follow' + btnClass + '" onclick="toggleFollow(\'' + item.code + '\')">' + btnText + '</span></td>';
         html += '<td class="td-follow-status">' + statusHtml + '</td>';
         html += '</tr>';
