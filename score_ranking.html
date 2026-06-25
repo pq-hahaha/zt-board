@@ -10,36 +10,55 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-serif; padding: 10px; }
-.header { text-align: center; margin-bottom: 12px; }
+.header { text-align: center; margin-bottom: 10px; }
 .header h1 { font-size: 20px; color: #c0392b; }
 .header p { font-size: 13px; color: #888; margin-top: 4px; }
-.ranking-table { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
+.ranking-wrap { max-width: 960px; margin: 0 auto; }
+.link-back { margin-bottom: 8px; }
+.link-back a { color: #3498db; font-size: 13px; text-decoration: none; }
+.link-back a:hover { text-decoration: underline; }
+.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.filter-bar input { padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 200px; outline: none; }
+.filter-bar input:focus { border-color: #3498db; }
+.filter-bar span { font-size: 12px; color: #888; }
+.ranking-table { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
 table { width: 100%; border-collapse: collapse; }
-thead th { background: #e74c3c; color: #fff; font-size: 13px; font-weight: 600; padding: 10px 8px; text-align: center; position: sticky; top: 0; }
-thead th:nth-child(1) { width: 50px; }
-thead th:nth-child(2) { width: 80px; }
-thead th:nth-child(3) { width: auto; text-align: left; padding-left: 16px; }
-thead th:nth-child(4), thead th:nth-child(5), thead th:nth-child(6), thead th:nth-child(7) { width: 80px; }
+thead th { background: #e74c3c; color: #fff; font-size: 13px; font-weight: 600; padding: 8px 6px; text-align: center; position: sticky; top: 0; z-index: 1; cursor: default; user-select: none; }
+thead th.sortable { cursor: pointer; }
+thead th.sortable:hover { background: #c0392b; }
+thead th.sort-asc::after { content: ' \u25B2'; font-size: 10px; }
+thead th.sort-desc::after { content: ' \u25BC'; font-size: 10px; }
 tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.15s; }
 tbody tr:hover { background: #fef5f5; }
-tbody td { padding: 8px; text-align: center; font-size: 14px; }
-tbody td:nth-child(1) { font-weight: bold; color: #999; font-size: 13px; }
-tbody td:nth-child(2) { font-family: Consolas, monospace; color: #555; font-size: 13px; }
-tbody td:nth-child(3) { text-align: left; padding-left: 16px; font-weight: 500; }
+/* 关注行醒目状态 - 金色底+加粗 */
+tbody tr.watched { background: #fff8dc !important; }
+tbody tr.watched td { font-weight: 600; }
+tbody tr.watched:hover { background: #ffefd5 !important; }
+tbody td { padding: 7px 6px; text-align: center; font-size: 14px; }
+/* 排名列 */
+.td-rank { font-weight: bold; color: #999; font-size: 13px; width: 45px; }
+/* 代码列 */
+.td-code { font-family: Consolas, monospace; color: #555; font-size: 13px; width: 75px; }
+/* 名称列 */
+.td-name { text-align: left; padding-left: 10px; font-weight: 500; }
+/* 总分列 */
 .score-total { font-weight: bold; font-size: 16px; }
 .score-high { color: #e74c3c; }
 .score-mid { color: #e67e22; }
 .score-low { color: #3498db; }
+/* 子分列 */
 .sub-score { font-size: 13px; color: #777; }
 .sub-r3 { color: #27ae60; }
+/* 关注按钮列 */
+.td-follow { width: 60px; }
+.btn-follow { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #555; transition: all 0.15s; }
+.btn-follow:hover { border-color: #e67e22; color: #e67e22; }
+.btn-follow.active { background: #e67e22; color: #fff; border-color: #e67e22; }
+/* 关注状态列 */
+.td-follow-status { width: 70px; font-size: 13px; }
+.status-yes { color: #e67e22; font-weight: 600; }
+.status-no { color: #aaa; }
 .loading { text-align: center; padding: 60px; color: #aaa; font-size: 16px; }
-.link-back { text-align: center; margin: 10px 0; }
-.link-back a { color: #3498db; font-size: 13px; text-decoration: none; }
-.link-back a:hover { text-decoration: underline; }
-.filter-bar { max-width: 900px; margin: 0 auto 10px; display: flex; gap: 8px; align-items: center; }
-.filter-bar input { padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 200px; outline: none; }
-.filter-bar input:focus { border-color: #3498db; }
-.filter-bar span { font-size: 12px; color: #888; }
 </style>
 </head>
 <body>
@@ -47,55 +66,153 @@ tbody td:nth-child(3) { text-align: left; padding-left: 16px; font-weight: 500; 
     <h1>个股评分排行</h1>
     <p id="dateInfo">加载中...</p>
 </div>
+<div class="ranking-wrap">
 <div class="link-back">
     <a href="breadth_chart_v2.html">返回图谱</a>
 </div>
 <div class="filter-bar">
-    <input type="text" id="filterInput" placeholder="搜索代码/名称" oninput="renderTable()">
+    <input type="text" id="filterInput" placeholder="搜索代码/名称/拼音" oninput="renderTable()">
     <span id="countInfo"></span>
 </div>
-<div class="ranking-table">
+<div class="ranking-table" style="max-height: calc(100vh - 120px); overflow-y: auto;">
     <table>
         <thead>
             <tr>
-                <th>排名</th>
+                <th class="sortable" data-sort="rank" id="thRank">排名</th>
                 <th>代码</th>
                 <th>名称</th>
-                <th>总分</th>
+                <th class="sortable" data-sort="score" id="thScore">总分</th>
                 <th>r1涨停</th>
                 <th>r2量价</th>
                 <th>r3扣分</th>
+                <th>关注</th>
+                <th class="sortable" data-sort="follow" id="thFollow">关注状态</th>
             </tr>
         </thead>
         <tbody id="rankBody">
-            <tr><td colspan="7" class="loading">正在加载评分数据...</td></tr>
+            <tr><td colspan="9" class="loading">正在加载评分数据...</td></tr>
         </tbody>
     </table>
+</div>
 </div>
 
 <script>
 var allData = [];
 var nameMap = {};
+var pinyinMap = {};
+var currentSort = 'score'; // 'score', 'rank', 'follow'
+var sortDirection = 'desc'; // desc = 从高到低
+
+// === 关注列表(localStorage, 独立key, 含时间戳) ===
+var FK_KEY = 'score_rank_follow';
+var FK_BAK_KEY = 'score_rank_follow_bak';
+
+function getFollowList() {
+    try {
+        var list = JSON.parse(localStorage.getItem(FK_KEY)) || [];
+        if (list.length === 0) {
+            var bak = JSON.parse(localStorage.getItem(FK_BAK_KEY)) || [];
+            if (bak.length > 0) { list = bak; localStorage.setItem(FK_KEY, JSON.stringify(list)); }
+        }
+        return list;
+    } catch(e) { return []; }
+}
+
+function saveFollowList(list) {
+    localStorage.setItem(FK_KEY, JSON.stringify(list));
+    if (list && list.length > 0) { localStorage.setItem(FK_BAK_KEY, JSON.stringify(list)); }
+}
+
+function isFollowed(code) {
+    var list = getFollowList();
+    for (var i = 0; i < list.length; i++) { if (list[i].code === code) return true; }
+    return false;
+}
+
+function getFollowTime(code) {
+    var list = getFollowList();
+    for (var i = 0; i < list.length; i++) { if (list[i].code === code) return list[i].time; }
+    return 0;
+}
+
+function toggleFollow(code) {
+    var list = getFollowList();
+    var found = false;
+    for (var i = 0; i < list.length; i++) {
+        if (list[i].code === code) {
+            list.splice(i, 1);
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        // 新关注, 记录时间戳(用于排序)
+        list.push({ code: code, time: Date.now() });
+    }
+    saveFollowList(list);
+    renderTable();
+}
+
+// === 列头排序点击 ===
+document.getElementById('thRank').addEventListener('click', function() {
+    if (currentSort === 'rank') { sortDirection = sortDirection === 'desc' ? 'asc' : 'desc'; }
+    else { currentSort = 'rank'; sortDirection = 'asc'; }
+    updateSortIndicators();
+    renderTable();
+});
+document.getElementById('thScore').addEventListener('click', function() {
+    if (currentSort === 'score') { sortDirection = sortDirection === 'desc' ? 'asc' : 'desc'; }
+    else { currentSort = 'score'; sortDirection = 'desc'; }
+    updateSortIndicators();
+    renderTable();
+});
+document.getElementById('thFollow').addEventListener('click', function() {
+    if (currentSort === 'follow') { sortDirection = sortDirection === 'desc' ? 'asc' : 'desc'; }
+    else { currentSort = 'follow'; sortDirection = 'desc'; } // 默认关注在前
+    updateSortIndicators();
+    renderTable();
+});
+
+function updateSortIndicators() {
+    // 清除所有排序样式
+    var ths = document.querySelectorAll('thead th.sortable');
+    for (var i = 0; i < ths.length; i++) {
+        ths[i].classList.remove('sort-asc', 'sort-desc');
+    }
+    // 设置当前排序样式
+    var activeTh = document.querySelector('thead th[data-sort="' + currentSort + '"]');
+    if (activeTh) { activeTh.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc'); }
+}
+
+// === 数据加载 ===
+function getBaseUrl() {
+    if (window.location.hostname === 'pq-hahaha.github.io') {
+        return 'https://pq-hahaha.github.io/zt-board/';
+    }
+    // 本地file://或localhost → 相对路径
+    return '';
+}
 
 function loadData() {
-    var scoreUrl = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json?v=v2_20260625'
-        : 'stock_basic_scores_v2.json?v=v2_20260625';
-    var poolUrl = (window.location.hostname === 'pq-hahaha.github.io')
-        ? 'https://pq-hahaha.github.io/zt-board/stock_pool.json'
-        : 'stock_pool.json';
+    var SCORE_VERSION = 'v2_20260625';
+    var scoreUrl = getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
+    var poolUrl = getBaseUrl() + 'stock_pool.json';
+    var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
 
     Promise.all([
-        fetch(scoreUrl).then(function(r) { return r.json(); }),
-        fetch(poolUrl).then(function(r) { return r.json(); })
+        fetch(scoreUrl).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+        fetch(poolUrl).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+        fetch(pinyinUrl).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).catch(function() { return {}; })
     ]).then(function(results) {
         var scoreData = results[0];
         var poolData = results[1];
+        var pinyinData = results[2] || {};
 
         for (var i = 0; i < poolData.length; i++) {
             var code = poolData[i].code.split('.')[0];
             nameMap[code] = poolData[i].name;
         }
+        pinyinMap = pinyinData;
 
         var scores = scoreData.scores;
         allData = [];
@@ -105,55 +222,104 @@ function loadData() {
                 allData.push({
                     code: code,
                     name: nameMap[code] || code,
+                    pinyin: pinyinMap[code] || '',
                     score: s.s,
                     r1: s.r1 || 0,
                     r2: s.r2 || 0,
-                    r3: s.r3 || 0
+                    r3: s.r3 || 0,
+                    detail: s.d || ''
                 });
             }
         }
+
+        // 默认按总分从高到低
         allData.sort(function(a, b) { return b.score - a.score; });
 
         document.getElementById('dateInfo').textContent =
             '数据日期: ' + scoreData.date + ' | 有效得分: ' + scoreData.scored + ' | 展示>=10分: ' + allData.length + '只';
 
+        updateSortIndicators();
         renderTable();
     }).catch(function(e) {
         document.getElementById('rankBody').innerHTML =
-            '<tr><td colspan="7" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
+            '<tr><td colspan="9" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
     });
 }
 
+// === 渲染表格 ===
 function renderTable() {
     var filter = document.getElementById('filterInput').value.trim().toLowerCase();
-    var filtered = allData;
-    if (filter) {
-        filtered = allData.filter(function(item) {
-            return item.code.indexOf(filter) >= 0 ||
-                   item.name.toLowerCase().indexOf(filter) >= 0;
+
+    // 先根据排序方式排序allData
+    var sortedData = allData.slice(); // 浅拷贝
+    var followList = getFollowList();
+
+    if (currentSort === 'score') {
+        sortedData.sort(function(a, b) {
+            return sortDirection === 'desc' ? b.score - a.score : a.score - b.score;
+        });
+    } else if (currentSort === 'rank') {
+        // 排名本质就是score排序
+        sortedData.sort(function(a, b) {
+            return sortDirection === 'asc' ? b.score - a.score : a.score - b.score;
+        });
+    } else if (currentSort === 'follow') {
+        // 关注状态排序: 关注的在前(按关注时间早晚), 未关注在后(按分数高低)
+        sortedData.sort(function(a, b) {
+            var aFollowed = isFollowed(a.code);
+            var bFollowed = isFollowed(b.code);
+            if (aFollowed && !bFollowed) return -1;
+            if (!aFollowed && bFollowed) return 1;
+            if (aFollowed && bFollowed) {
+                // 都是关注状态, 按关注时间排序
+                var aTime = getFollowTime(a.code);
+                var bTime = getFollowTime(b.code);
+                return sortDirection === 'desc' ? aTime - bTime : bTime - aTime;
+                // desc: 关注时间早的在前, asc: 关注时间晚的在前
+            }
+            // 都不是关注状态, 按分数排
+            return b.score - a.score;
         });
     }
 
-    document.getElementById('countInfo').textContent = '显示 ' + filtered.length + '/' + allData.length + ' 只';
+    // 过滤
+    var filtered = sortedData;
+    if (filter) {
+        filtered = sortedData.filter(function(item) {
+            return item.code.indexOf(filter) >= 0 ||
+                   item.name.toLowerCase().indexOf(filter) >= 0 ||
+                   item.pinyin.indexOf(filter) >= 0;
+        });
+    }
+
+    document.getElementById('countInfo').textContent = '显示 ' + filtered.length + '/' + allData.length + '只 | 关注 ' + followList.length + '只';
 
     var html = '';
     for (var i = 0; i < filtered.length; i++) {
         var item = filtered[i];
         var rank = i + 1;
+        var followed = isFollowed(item.code);
         var scoreClass = item.score >= 25 ? 'score-high' : (item.score >= 15 ? 'score-mid' : 'score-low');
         var r3Display = item.r3 > 0 ? '-' + item.r3 : '0';
-        html += '<tr>';
-        html += '<td>' + rank + '</td>';
-        html += '<td>' + item.code + '</td>';
-        html += '<td>' + item.name + '</td>';
+        var rowClass = followed ? ' watched' : '';
+        var btnClass = followed ? ' active' : '';
+        var btnText = followed ? '已关注' : '关注';
+        var statusHtml = followed ? '<span class="status-yes">是</span>' : '<span class="status-no">否</span>';
+
+        html += '<tr class="' + rowClass + '">';
+        html += '<td class="td-rank">' + rank + '</td>';
+        html += '<td class="td-code">' + item.code + '</td>';
+        html += '<td class="td-name">' + item.name + '</td>';
         html += '<td class="score-total ' + scoreClass + '">' + item.score + '</td>';
         html += '<td class="sub-score">' + item.r1 + '</td>';
         html += '<td class="sub-score">' + (item.r2 % 1 === 0 ? item.r2 : item.r2.toFixed(1)) + '</td>';
         html += '<td class="sub-score sub-r3">' + r3Display + '</td>';
+        html += '<td class="td-follow"><span class="btn-follow' + btnClass + '" onclick="toggleFollow(\'' + item.code + '\')">' + btnText + '</span></td>';
+        html += '<td class="td-follow-status">' + statusHtml + '</td>';
         html += '</tr>';
     }
     if (filtered.length === 0) {
-        html = '<tr><td colspan="7" class="loading">无匹配结果</td></tr>';
+        html = '<tr><td colspan="9" class="loading">无匹配结果</td></tr>';
     }
     document.getElementById('rankBody').innerHTML = html;
 }
