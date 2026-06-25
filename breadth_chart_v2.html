@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>赚钱效应图谱 v2</title>
 <script src="https://cdn.staticfile.org/echarts/5.4.3/echarts.min.js"></script>
 <style>
@@ -365,7 +368,7 @@ chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
 // === IndexedDB 缓存 ===
-var DATA_VERSION = 'v1_20260624';
+var DATA_VERSION = 'v2_20260625';
 function openDB(){return new Promise(function(resolve,reject){var req=indexedDB.open('zt_board',1);req.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains('cache'))db.createObjectStore('cache',{keyPath:'key'});};req.onsuccess=function(e){resolve(e.target.result);};req.onerror=function(e){reject(e);};});}
 function getCache(key){return openDB().then(function(db){return new Promise(function(resolve){var tx=db.transaction('cache','readonly');var r=tx.objectStore('cache').get(key);r.onsuccess=function(){resolve(r.result?r.result.value:null);};r.onerror=function(){resolve(null);};});}).catch(function(){return null;});}
 function setCache(key,val){return openDB().then(function(db){return new Promise(function(resolve){var tx=db.transaction('cache','readwrite');tx.objectStore('cache').put({key:key,value:val});tx.oncomplete=function(){resolve();};tx.onerror=function(){resolve();};});}).catch(function(){});}
@@ -563,8 +566,8 @@ function renderWatchlist() {
         if (basicScoresV2Loaded) return Promise.resolve();
         if (basicScoresV2Loading) return basicScoresV2Loading;
         var url = (window.location.hostname === 'pq-hahaha.github.io') 
-            ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json'
-            : 'stock_basic_scores_v2.json';
+            ? 'https://pq-hahaha.github.io/zt-board/stock_basic_scores_v2.json?v=' + DATA_VERSION
+            : 'stock_basic_scores_v2.json?v=' + DATA_VERSION;
         basicScoresV2Loading = fetch(url).then(function(r) { return r.json(); }).then(function(d) {
             basicScoresV2 = d.scores;
             basicScoresV2Loaded = true;
