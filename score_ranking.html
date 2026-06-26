@@ -115,6 +115,43 @@ var basicScoresV2Loaded = false;
 var currentSort = 'score'; // 'score', 'rank', 'follow'
 var sortDirection = 'desc';
 
+// === IDB缓存辅助函数(复用cjws_cache数据库) ===
+function getScoreIDBKey() {
+    var t = new Date();
+    return t.getFullYear() + '-' + ('0'+(t.getMonth()+1)).slice(-2) + '-' + ('0'+t.getDate()).slice(-2) + '_chongjiuwanshi_scores';
+}
+function scoreIdbGet(key) {
+    return new Promise(function(resolve) {
+        try {
+            var req = indexedDB.open('cjws_cache', 1);
+            req.onupgradeneeded = function(e) { try { e.target.result.createObjectStore('stock_data'); } catch(ex) {} };
+            req.onsuccess = function(e) {
+                var db = e.target.result;
+                try {
+                    var tx = db.transaction('stock_data', 'readonly');
+                    var getReq = tx.objectStore('stock_data').get(key);
+                    getReq.onsuccess = function() { resolve(getReq.result || null); };
+                    getReq.onerror = function() { resolve(null); };
+                } catch(ex) { resolve(null); }
+            };
+            req.onerror = function() { resolve(null); };
+        } catch(e) { resolve(null); }
+    });
+}
+function scoreIdbPut(key, val) {
+    try {
+        var req = indexedDB.open('cjws_cache', 1);
+        req.onupgradeneeded = function(e) { try { e.target.result.createObjectStore('stock_data'); } catch(ex) {} };
+        req.onsuccess = function(e) {
+            var db = e.target.result;
+            try {
+                var tx = db.transaction('stock_data', 'readwrite');
+                tx.objectStore('stock_data').put(val, key);
+            } catch(ex) {}
+        };
+    } catch(e) {}
+}
+
 // 加载评分数据(同步功能需要, 如果已加载直接返回)
 function loadBasicScoresV2() {
     if (basicScoresV2Loaded && Object.keys(basicScoresV2).length > 0) {
@@ -287,57 +324,75 @@ function getBaseUrl() {
 }
 
 function loadData() {
-    var SCORE_VERSION = 'v2_20260626';
-    var scoreUrl = getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
-    var poolUrl = getBaseUrl() + 'stock_pool.json';
-    var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
+    var cacheKey = getScoreIDBKey();
 
-    // 评分数据(必须), pool(名称映射,可缺), pinyin(搜索,可缺)
-    var scorePromise = fetch(scoreUrl).then(function(r) {
-        if (!r.ok) throw new Error('scores HTTP ' + r.status);
-        return r.json();
-    });
-    var poolPromise = fetch(poolUrl).then(function(r) {
-        if (!r.ok) return null; // pool不存在不崩溃,用其他来源补名称
-        return r.json();
-    }).catch(function() { return null; });
-    var pinyinPromise = fetch(pinyinUrl).then(function(r) {
-        if (!r.ok) return {};
-        return r.json();
-    }).catch(function() { return {}; });
-
-    Promise.all([scorePromise, poolPromise, pinyinPromise]).then(function(results) {
-        var scoreData = results[0];
-        var poolData = results[1];
-        var pinyinData = results[2] || {};
-
-        // 名称映射: pool优先 > pinyin > 评分数据detail提取
-        if (poolData) {
-            for (var i = 0; i < poolData.length; i++) {
-                var code = poolData[i].code.split('.')[0];
-                nameMap[code] = poolData[i].name;
-            }
-        }
-        pinyinMap = pinyinData;
-
-        var scores = scoreData.scores;
-        // 存到全局变量(同步功能需要)
-        basicScoresV2 = scores;
-        basicScoresV2Loaded = true;
-        // 遍历所有评分, 提取名称(从detail或用code)
-        for (var code in scores) {
-            if (!nameMap[code]) {
-                // 尝试从评分detail中提取名称(如有)
-                nameMap[code] = code;
-            }
+    // 先试IDB缓存(当天有效)
+    scoreIdbGet(cacheKey).then(function(cached) {
+        if (cached && cached.scores && Object.keys(cached.scores).length > 0) {
+            // 命中缓存, 直接使用(跳过fetch+parse)
+            basicScoresV2 = cached.scores;
+            nameMap = cached.nameMap || {};
+            pinyinMap = cached.pinyinMap || {};
+            basicScoresV2Loaded = true;
+            rebuildDisplayDataFromScores(basicScoresV2, {date: cached.date});
+            return;
         }
 
-        // 构建显示数据: >=10分 + 关注的<10分
-        rebuildDisplayDataFromScores(scores, scoreData);
+        // 未命中, 正常fetch
+        var SCORE_VERSION = 'v2_20260626';
+        var scoreUrl = getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
+        var poolUrl = getBaseUrl() + 'stock_pool.json';
+        var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
 
-    }).catch(function(e) {
-        document.getElementById('rankBody').innerHTML =
-            '<tr><td colspan="9" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
+        var scorePromise = fetch(scoreUrl).then(function(r) {
+            if (!r.ok) throw new Error('scores HTTP ' + r.status);
+            return r.json();
+        });
+        var poolPromise = fetch(poolUrl).then(function(r) {
+            if (!r.ok) return null;
+            return r.json();
+        }).catch(function() { return null; });
+        var pinyinPromise = fetch(pinyinUrl).then(function(r) {
+            if (!r.ok) return {};
+            return r.json();
+        }).catch(function() { return {}; });
+
+        Promise.all([scorePromise, poolPromise, pinyinPromise]).then(function(results) {
+            var scoreData = results[0];
+            var poolData = results[1];
+            var pinyinData = results[2] || {};
+
+            if (poolData) {
+                for (var i = 0; i < poolData.length; i++) {
+                    var code = poolData[i].code.split('.')[0];
+                    nameMap[code] = poolData[i].name;
+                }
+            }
+            pinyinMap = pinyinData;
+
+            var scores = scoreData.scores;
+            basicScoresV2 = scores;
+            basicScoresV2Loaded = true;
+            for (var code in scores) {
+                if (!nameMap[code]) {
+                    nameMap[code] = code;
+                }
+            }
+
+            // 写IDB缓存(当天有效, 次日自动失效)
+            scoreIdbPut(cacheKey, {
+                date: scoreData.date,
+                scores: scores,
+                nameMap: nameMap,
+                pinyinMap: pinyinMap
+            });
+
+            rebuildDisplayDataFromScores(scores, scoreData);
+
+        }).catch(function(e) {
+            document.getElementById('rankBody').innerHTML =
+                '<tr><td colspan="9" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
+        });
     });
 }
 
