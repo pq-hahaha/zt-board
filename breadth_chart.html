@@ -201,6 +201,29 @@ function buildOption(priceData) {
     var markLineData = [];
     dayLineIndices.forEach(function(idx) { markLineData.push([{xAxis: idx}, {xAxis: idx}]); });
 
+    // markPoint: 每天开盘(9:30,橙色) + 收盘(15:00,红色)
+    var markPointData = [];
+    for (var d = 0; d < dayBoundaries.length; d++) {
+        var startIdx = dayBoundaries[d];
+        var endIdx = (d + 1 < dayBoundaries.length) ? dayBoundaries[d + 1] - 1 : (priceData ? priceData.length - 1 : startIdx + 47);
+        if (priceData && startIdx < priceData.length && priceData[startIdx] !== null) {
+            markPointData.push({
+                xAxis: startIdx, yAxis: priceData[startIdx],
+                symbol: 'circle', symbolSize: 10,
+                itemStyle: {color: '#e67e22'},
+                label: {show: true, formatter: '开盘', fontSize: 10, color: '#e67e22', position: 'top'}
+            });
+        }
+        if (priceData && endIdx < priceData.length && priceData[endIdx] !== null) {
+            markPointData.push({
+                xAxis: endIdx, yAxis: priceData[endIdx],
+                symbol: 'circle', symbolSize: 10,
+                itemStyle: {color: '#e74c3c'},
+                label: {show: true, formatter: '收盘', fontSize: 10, color: '#e74c3c', position: 'top'}
+            });
+        }
+    }
+
     return {
         backgroundColor: '#fff',
         tooltip: {
@@ -256,7 +279,8 @@ function buildOption(priceData) {
                 lineStyle: {color: '#e74c3c', width: 2.5},
                 areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(231,76,60,0.10)'}, {offset: 1, color: 'rgba(231,76,60,0.0)'}]) },
                 markArea: { silent: true, data: markAreaPairs },
-                markLine: { silent: true, symbol: 'none', lineStyle: {type: 'solid', color: '#e67e22', width: 2}, data: markLineData }
+                markLine: { silent: true, symbol: 'none', lineStyle: {type: 'solid', color: '#e67e22', width: 2}, data: markLineData },
+                markPoint: { silent: true, symbol: 'none', data: markPointData }
             },
             {
                 name: '上涨家数', type: 'line', data: advData, yAxisIndex: 1,
