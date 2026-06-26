@@ -81,7 +81,6 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
             <button class="wl-del-btn" id="batchDeleteBtn" onclick="removeFromWatchlistBatch()">删除选中(0)</button>
             <button class="wl-mgmt-btn" onclick="toggleSelectAll()">全选</button>
         </span>
-        <button class="wl-mgmt-btn" onclick="syncWatchlist()" style="background:#27ae60;">同步</button>
     </div>
     <div class="watchlist-items" id="watchlistItems">
         <span style="color:#bbb;font-size:12px;">观察池为空，查看个股后点击"入观察池"添加</span>
@@ -403,7 +402,6 @@ function renderStockChart(code) {
 // === 观察池(含备份恢复机制) ===
 var WL_KEY = 'zt_watchlist';
 var WL_BAK_KEY = 'zt_watchlist_bak';
-var WL_REMOVED_KEY = 'zt_watchlist_removed';
 var WL_MAX = 30;
 var wlMode = 'normal';
 var wlSelected = new Set();
@@ -446,12 +444,6 @@ function addToWatchlist() {
 
 function removeFromWatchlist(code) {
     var list = getWatchlist().filter(function(item) { return item.code !== code; });
-    // 写删除记录(同步时用于通知排行页也删除这只票)
-    try {
-        var removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || [];
-        removed.push({code: code, removedAt: new Date().toISOString()});
-        localStorage.setItem(WL_REMOVED_KEY, JSON.stringify(removed));
-    } catch(e) {}
     saveWatchlist(list);
     renderWatchlist();
     updateWatchlistBtn();
@@ -488,70 +480,6 @@ function toggleSelectAll() {
     if (wlSelected.size === list.length) wlSelected.clear();
     else { wlSelected.clear(); list.forEach(function(item) { wlSelected.add(item.code); }); }
     renderWatchlist();
-}
-
-// === 同步观察池与排行关注池 ===
-function syncWatchlist() {
-    // 1. 读两个池 + V2删除记录
-    var wlList = getWatchlist();  // V2活跃池
-    var fkList = [];  // 排行活跃池
-    try { fkList = JSON.parse(localStorage.getItem('score_rank_follow')) || []; } catch(e) {}
-    var removed = [];
-    try { removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || []; } catch(e) {}
-
-    // 2. 合并(取合集), 名称回退: item.name → stockNames
-    var merged = {};  // code -> {code, name, time}
-    wlList.forEach(function(item) {
-        merged[item.code] = {code: item.code, name: item.name || stockNames[item.code] || '', time: item.time || Date.now()};
-    });
-    fkList.forEach(function(item) {
-        if (!merged[item.code]) {
-            merged[item.code] = {code: item.code, name: item.name || stockNames[item.code] || '', time: item.time || Date.now()};
-        }
-    });
-
-    // 3. 剔除删除记录中的票
-    var removedCodes = {};
-    removed.forEach(function(r) { removedCodes[r.code] = true; });
-    for (var code in merged) {
-        if (removedCodes[code]) delete merged[code];
-    }
-
-    // 4. 转数组 + 按分数排序(低→高)准备裁剪
-    var mergedList = [];
-    for (var code in merged) mergedList.push(merged[code]);
-
-    if (mergedList.length > WL_MAX) {
-        // 加载评分数据用于排序
-        loadBasicScoresV2().then(function() {
-            // 按分数从低到高排序,同分按关注时间早→晚
-            mergedList.sort(function(a, b) {
-                var sa = (basicScoresV2[a.code] && basicScoresV2[a.code].s) ? basicScoresV2[a.code].s : 0;
-                var sb = (basicScoresV2[b.code] && basicScoresV2[b.code].s) ? basicScoresV2[b.code].s : 0;
-                if (sa !== sb) return sa - sb;
-                return (a.time || 0) - (b.time || 0);
-            });
-            // 保留最高的WL_MAX只
-            mergedList = mergedList.slice(-WL_MAX);
-            // 写回两个池
-            saveWatchlist(mergedList);
-            try { localStorage.setItem('score_rank_follow', JSON.stringify(mergedList)); } catch(e) {}
-            // 清空删除记录
-            try { localStorage.setItem(WL_REMOVED_KEY, '[]'); } catch(e) {}
-            renderWatchlist();
-            updateWatchlistBtn();
-            alert('已同步 ' + mergedList.length + ' 只股票(自动裁剪至' + WL_MAX + '只)');
-        });
-        return;
-    }
-
-    // 5. 未超限,直接写回
-    saveWatchlist(mergedList);
-    try { localStorage.setItem('score_rank_follow', JSON.stringify(mergedList)); } catch(e) {}
-    try { localStorage.setItem(WL_REMOVED_KEY, '[]'); } catch(e) {}
-    renderWatchlist();
-    updateWatchlistBtn();
-    alert('已同步 ' + mergedList.length + ' 只股票');
 }
 
 function updateWatchlistBtn() {

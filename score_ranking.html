@@ -163,7 +163,7 @@ function loadBasicScoresV2() {
         return Promise.resolve();
     }
     // 未加载, 直接fetch评分数据(不重新渲染表格)
-    var SCORE_VERSION = 'v2_20260626';
+    var SCORE_VERSION = 'v2_20260627';
     return fetch(getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION)
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -353,7 +353,7 @@ function loadData() {
         }
 
         // 未命中, 正常fetch
-        var SCORE_VERSION = 'v2_20260626';
+        var SCORE_VERSION = 'v2_20260627';
         var scoreUrl = getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
         var prevUrl = getBaseUrl() + 'stock_basic_scores_v2_prev.json';
         var poolUrl = getBaseUrl() + 'stock_pool.json';
