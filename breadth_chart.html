@@ -2,10 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name-equiv="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>赚钱效应图谱 v2</title>
 <script src="https://cdn.staticfile.org/echarts/5.4.3/echarts.min.js"></script>
 <style>
@@ -272,54 +269,17 @@ function buildOption(priceData) {
 chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
-// === 数据加载: fetch + setTimeout(50)延迟解析 + IndexedDB缓存 ===
-// 首次: 下载2.4MB gzip → setTimeout(50) → JSON.parse → 写IDB → 2-3秒
-// 二次: IDB读已解析对象 → 秒开(无JSON.parse)
-// 慢的根因不是下载,是JSON.parse 9MB阻塞主线程; setTimeout让UI先更新"正在解析"
-
-var STOCK_DATA_VERSION = 'v1_20260626';
+// === 数据加载: fetch + setTimeout(50)延迟解析 ===
+// 首次: 下载2.4MB gzip → setTimeout(50) → JSON.parse → 2-3秒
+// 二次: 浏览器HTTP缓存(gzip) → 秒级
+// 慢根因: JSON.parse 9MB阻塞主线程; setTimeout让UI先更新"正在解析"
 var pendingStockCode = '';
 
-function openIDB() {
-    return new Promise(function(resolve, reject) {
-        var req = indexedDB.open('zt_board_data', 1);
-        req.onupgradeneeded = function(e) { e.target.result.createObjectStore('data'); };
-        req.onsuccess = function(e) { resolve(e.target.result); };
-        req.onerror = function(e) { reject(e.target.error); };
-    });
-}
-function idbGet(db, key) {
-    return new Promise(function(resolve, reject) {
-        var tx = db.transaction('data', 'readonly');
-        var req = tx.objectStore('data').get(key);
-        req.onsuccess = function(e) { resolve(e.target.result); };
-        req.onerror = function(e) { reject(e.target.error); };
-    });
-}
-function idbPut(db, key, val) {
-    return new Promise(function(resolve, reject) {
-        var tx = db.transaction('data', 'readwrite');
-        var req = tx.objectStore('data').put(val, key);
-        req.onsuccess = function() { resolve(); };
-        req.onerror = function(e) { reject(e.target.error); };
-    });
-}
-
-function onFullDataReady(d) {
-    allStockData = d.stocks;
-    if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
-    if (!allStockData['600519'] && currentPriceData) { allStockData['600519'] = currentPriceData; }
-    fullDataLoaded = true;
+function loadStockData() {
     var ind = document.getElementById('loadIndicator');
-    if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
-    renderWatchlist();
-    if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
-}
-
-// 核心fetch+解析(带完整错误处理)
-function fetchAndParse(url, db, ind) {
     if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
-    fetch(url).then(function(r) {
+
+    fetch(getBaseUrl() + 'breadth_stock_data.json').then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
     }).then(function(txt) {
@@ -327,13 +287,13 @@ function fetchAndParse(url, db, ind) {
         setTimeout(function() {
             try {
                 var d = JSON.parse(txt);
-                onFullDataReady(d);
-                // IDB缓存写入(非阻塞,失败不影响数据)
-                if (db) {
-                    idbPut(db, 'stock_' + STOCK_DATA_VERSION, d).catch(function(e) {
-                        console.warn('IDB cache write skipped:', e);
-                    });
-                }
+                allStockData = d.stocks || {};
+                if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
+                fullDataLoaded = true;
+                if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
+                renderWatchlist();
+                updateWatchlistBtn();
+                if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
             } catch(e) {
                 console.error('JSON.parse failed:', e);
                 if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
@@ -344,33 +304,7 @@ function fetchAndParse(url, db, ind) {
         if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
     });
 }
-
-function loadFullStockData() {
-    var ind = document.getElementById('loadIndicator');
-    if (ind) { ind.style.display = ''; ind.innerHTML = '<span style="color:#3498db">正在加载...</span>'; }
-
-    var url = getBaseUrl() + 'breadth_stock_data.json?v=' + STOCK_DATA_VERSION;
-
-    openIDB().then(function(db) {
-        idbGet(db, 'stock_' + STOCK_DATA_VERSION).then(function(cached) {
-            if (cached) {
-                // 缓存命中 → 秒开
-                onFullDataReady(cached);
-                return;
-            }
-            // 缓存miss → fetch+解析
-            fetchAndParse(url, db, ind);
-        }).catch(function(e) {
-            console.warn('IDB read failed, fetch directly:', e);
-            fetchAndParse(url, null, ind);
-        });
-    }).catch(function(e) {
-        // IDB不可用 → 直接fetch(无缓存)
-        console.warn('IDB unavailable, fetch directly:', e);
-        fetchAndParse(url, null, ind);
-    });
-}
-loadFullStockData();
+loadStockData();
 
 // --- 个股查看 ---
 function loadStock() {
@@ -533,12 +467,11 @@ function renderWatchlist() {
 }
 
 // === V2评分(按需加载) ===
-var SCORE_DATA_VERSION = 'v2_20260626';
 
 function loadBasicScoresV2() {
     if (basicScoresV2Loaded) return Promise.resolve();
     if (basicScoresV2Loading) return basicScoresV2Loading;
-    basicScoresV2Loading = fetch(getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_DATA_VERSION).then(function(r) { return r.json(); }).then(function(d) {
+    basicScoresV2Loading = fetch(getBaseUrl() + 'stock_basic_scores_v2.json').then(function(r) { return r.json(); }).then(function(d) {
         basicScoresV2 = d.scores;
         basicScoresV2Loaded = true;
         basicScoresV2Loading = null;
