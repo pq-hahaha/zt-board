@@ -180,7 +180,7 @@ function toggleFollow(code) {
     if (!found) {
         // 满30只,不允许添加(静默忽略)
         if (list.length >= 30) return;
-        list.push({ code: code, time: Date.now() });
+        list.push({ code: code, name: nameMap[code] || '', time: Date.now() });
     }
     saveFollowList(list);
     // 重新构建数据(关注状态变了,<10分的可能新加入)
@@ -197,14 +197,14 @@ function syncFollowList() {
     var removed = [];
     try { removed = JSON.parse(localStorage.getItem('zt_watchlist_removed')) || []; } catch(e) {}
 
-    // 2. 合并(取合集)
+    // 2. 合并(取合集), 名称回退: item.name → nameMap
     var merged = {};
     wlList.forEach(function(item) {
-        merged[item.code] = {code: item.code, name: item.name, time: item.time || Date.now()};
+        merged[item.code] = {code: item.code, name: item.name || nameMap[item.code] || '', time: item.time || Date.now()};
     });
     fkList.forEach(function(item) {
         if (!merged[item.code]) {
-            merged[item.code] = {code: item.code, name: item.name || '', time: item.time || Date.now()};
+            merged[item.code] = {code: item.code, name: item.name || nameMap[item.code] || '', time: item.time || Date.now()};
         }
     });
 

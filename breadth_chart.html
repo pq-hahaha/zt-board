@@ -475,14 +475,14 @@ function syncWatchlist() {
     var removed = [];
     try { removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || []; } catch(e) {}
 
-    // 2. 合并(取合集)
+    // 2. 合并(取合集), 名称回退: item.name → stockNames
     var merged = {};  // code -> {code, name, time}
     wlList.forEach(function(item) {
-        merged[item.code] = {code: item.code, name: item.name, time: item.time || Date.now()};
+        merged[item.code] = {code: item.code, name: item.name || stockNames[item.code] || '', time: item.time || Date.now()};
     });
     fkList.forEach(function(item) {
         if (!merged[item.code]) {
-            merged[item.code] = {code: item.code, name: item.name || '', time: item.time || Date.now()};
+            merged[item.code] = {code: item.code, name: item.name || stockNames[item.code] || '', time: item.time || Date.now()};
         }
     });
 
