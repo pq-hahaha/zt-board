@@ -49,6 +49,8 @@ tbody td { padding: 7px 6px; text-align: center; font-size: 14px; }
 .td-name { text-align: left; padding-left: 10px; font-weight: 500; }
 /* 总分列 */
 .score-total { font-weight: bold; font-size: 16px; }
+/* 分数变化列 */
+.td-delta { font-weight: 600; font-size: 14px; width: 70px; }
 .score-high { color: #e74c3c; }
 .score-mid { color: #e67e22; }
 .score-low { color: #3498db; }
@@ -91,6 +93,7 @@ tbody td { padding: 7px 6px; text-align: center; font-size: 14px; }
                 <th>代码</th>
                 <th>名称</th>
                 <th class="sortable" data-sort="score" id="thScore">总分</th>
+                <th class="sortable" data-sort="delta" id="thDelta">变化</th>
                 <th>r1涨停</th>
                 <th>r2量价</th>
                 <th>r3扣分</th>
@@ -99,7 +102,7 @@ tbody td { padding: 7px 6px; text-align: center; font-size: 14px; }
             </tr>
         </thead>
         <tbody id="rankBody">
-            <tr><td colspan="9" class="loading">正在加载评分数据...</td></tr>
+            <tr><td colspan="10" class="loading">正在加载评分数据...</td></tr>
         </tbody>
     </table>
 </div>
@@ -112,7 +115,9 @@ var nameMap = {};
 var pinyinMap = {};
 var basicScoresV2 = {};   // 评分数据(同步时需要)
 var basicScoresV2Loaded = false;
-var currentSort = 'score'; // 'score', 'rank', 'follow'
+var prevScores = {};     // 昨天的评分数据(用于计算分差)
+var prevScoresLoaded = false;
+var currentSort = 'score'; // 'score', 'rank', 'follow', 'delta'
 var sortDirection = 'desc';
 
 // === IDB缓存辅助函数(复用cjws_cache数据库) ===
@@ -307,6 +312,12 @@ document.getElementById('thFollow').addEventListener('click', function() {
     updateSortIndicators();
     renderTable();
 });
+document.getElementById('thDelta').addEventListener('click', function() {
+    if (currentSort === 'delta') { sortDirection = sortDirection === 'desc' ? 'asc' : 'desc'; }
+    else { currentSort = 'delta'; sortDirection = 'desc'; }
+    updateSortIndicators();
+    renderTable();
+});
 
 function updateSortIndicators() {
     var ths = document.querySelectorAll('thead th.sortable');
@@ -334,13 +345,17 @@ function loadData() {
             nameMap = cached.nameMap || {};
             pinyinMap = cached.pinyinMap || {};
             basicScoresV2Loaded = true;
-            rebuildDisplayDataFromScores(basicScoresV2, {date: cached.date});
+            // 也加载prev数据(缓存不存prev)
+            loadPrevScores(function() {
+                rebuildDisplayDataFromScores(basicScoresV2, {date: cached.date});
+            });
             return;
         }
 
         // 未命中, 正常fetch
         var SCORE_VERSION = 'v2_20260626';
         var scoreUrl = getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
+        var prevUrl = getBaseUrl() + 'stock_basic_scores_v2_prev.json';
         var poolUrl = getBaseUrl() + 'stock_pool.json';
         var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
 
@@ -348,6 +363,10 @@ function loadData() {
             if (!r.ok) throw new Error('scores HTTP ' + r.status);
             return r.json();
         });
+        var prevPromise = fetch(prevUrl).then(function(r) {
+            if (!r.ok) return null;
+            return r.json();
+        }).catch(function() { return null; });
         var poolPromise = fetch(poolUrl).then(function(r) {
             if (!r.ok) return null;
             return r.json();
@@ -357,10 +376,11 @@ function loadData() {
             return r.json();
         }).catch(function() { return {}; });
 
-        Promise.all([scorePromise, poolPromise, pinyinPromise]).then(function(results) {
+        Promise.all([scorePromise, prevPromise, poolPromise, pinyinPromise]).then(function(results) {
             var scoreData = results[0];
-            var poolData = results[1];
-            var pinyinData = results[2] || {};
+            var prevData = results[1];
+            var poolData = results[2];
+            var pinyinData = results[3] || {};
 
             if (poolData) {
                 for (var i = 0; i < poolData.length; i++) {
@@ -373,6 +393,13 @@ function loadData() {
             var scores = scoreData.scores;
             basicScoresV2 = scores;
             basicScoresV2Loaded = true;
+
+            // 存prev数据
+            if (prevData && prevData.scores) {
+                prevScores = prevData.scores;
+                prevScoresLoaded = true;
+            }
+
             for (var code in scores) {
                 if (!nameMap[code]) {
                     nameMap[code] = code;
@@ -391,8 +418,24 @@ function loadData() {
 
         }).catch(function(e) {
             document.getElementById('rankBody').innerHTML =
-                '<tr><td colspan="9" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
+                '<tr><td colspan="10" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
         });
+    });
+}
+
+function loadPrevScores(callback) {
+    var prevUrl = getBaseUrl() + 'stock_basic_scores_v2_prev.json';
+    fetch(prevUrl).then(function(r) {
+        if (!r.ok) { if (callback) callback(); return; }
+        return r.json();
+    }).then(function(prevData) {
+        if (prevData && prevData.scores) {
+            prevScores = prevData.scores;
+            prevScoresLoaded = true;
+        }
+        if (callback) callback();
+    }).catch(function() {
+        if (callback) callback();
     });
 }
 
@@ -406,6 +449,9 @@ function rebuildDisplayDataFromScores(scores, scoreData) {
 
     for (var code in scores) {
         var s = scores[code];
+        var prev = prevScores[code];
+        var prevScore = (prev && prev.s !== undefined) ? prev.s : null;
+        var delta = prevScore !== null ? (s.s - prevScore) : null;
         var item = {
             code: code,
             name: nameMap[code] || code,
@@ -414,6 +460,7 @@ function rebuildDisplayDataFromScores(scores, scoreData) {
             r1: s.r1 || 0,
             r2: s.r2 || 0,
             r3: s.r3 || 0,
+            delta: delta,
             detail: s.d || '',
             under10: s.s < 10
         };
@@ -497,6 +544,16 @@ function renderTable() {
             if (a.under10 && !b.under10) return 1;
             return b.score - a.score;
         });
+    } else if (currentSort === 'delta') {
+        // 按分数变化排序: delta有值排前面, null排后面
+        displayData.sort(function(a, b) {
+            var da = (a.delta !== null && a.delta !== undefined) ? a.delta : null;
+            var db = (b.delta !== null && b.delta !== undefined) ? b.delta : null;
+            if (da === null && db === null) return 0;
+            if (da === null) return 1;
+            if (db === null) return -1;
+            return sortDirection === 'desc' ? db - da : da - db;
+        });
     }
 
     // 过滤
@@ -528,6 +585,19 @@ function renderTable() {
         var scoreClass = isLow ? 'score-under10' :
                          (item.score >= 25 ? 'score-high' : (item.score >= 15 ? 'score-mid' : 'score-low'));
         var r3Display = item.r3 > 0 ? '-' + item.r3 : '0';
+
+        // 分数变化: ↑+2.5 或 ↓-1.0, 无prev数据显示--
+        var deltaHtml = '--';
+        if (item.delta !== null && item.delta !== undefined) {
+            if (item.delta > 0) {
+                deltaHtml = '<span style="color:#e74c3c">↑+' + item.delta.toFixed(1) + '</span>';
+            } else if (item.delta < 0) {
+                deltaHtml = '<span style="color:#27ae60">↓' + item.delta.toFixed(1) + '</span>';
+            } else {
+                deltaHtml = '<span style="color:#999">--</span>';
+            }
+        }
+
         var rowClass = followed ? (isLow ? 'watched-low' : 'watched') : '';
         var btnClass = followed ? ' active' : '';
         var btnText = followed ? '已关注' : '关注';
@@ -539,6 +609,7 @@ function renderTable() {
         html += '<td class="td-code">' + item.code + '</td>';
         html += '<td class="td-name">' + item.name + '</td>';
         html += '<td class="score-total ' + scoreClass + '">' + item.score + '</td>';
+        html += '<td class="td-delta">' + deltaHtml + '</td>';
         html += '<td class="' + subClass + '">' + item.r1 + '</td>';
         html += '<td class="' + subClass + '">' + (item.r2 % 1 === 0 ? item.r2 : item.r2.toFixed(1)) + '</td>';
         html += '<td class="' + subClass + (item.r3 > 0 ? ' sub-r3' : '') + '">' + r3Display + '</td>';
@@ -547,7 +618,7 @@ function renderTable() {
         html += '</tr>';
     }
     if (filtered.length === 0) {
-        html = '<tr><td colspan="9" class="loading">无匹配结果</td></tr>';
+        html = '<tr><td colspan="10" class="loading">无匹配结果</td></tr>';
     }
     document.getElementById('rankBody').innerHTML = html;
 }
