@@ -277,7 +277,7 @@ window.addEventListener('resize', function() { chart.resize(); });
 // 二次: IDB读已解析对象 → 秒开(无JSON.parse)
 // 慢的根因不是下载,是JSON.parse 9MB阻塞主线程; setTimeout让UI先更新"正在解析"
 
-var STOCK_DATA_VERSION = 'v1_20260625';
+var STOCK_DATA_VERSION = 'v1_20260626';
 var pendingStockCode = '';
 
 function openIDB() {
@@ -533,7 +533,7 @@ function renderWatchlist() {
 }
 
 // === V2评分(按需加载) ===
-var SCORE_DATA_VERSION = 'v2_20260625';
+var SCORE_DATA_VERSION = 'v2_20260626';
 
 function loadBasicScoresV2() {
     if (basicScoresV2Loaded) return Promise.resolve();
