@@ -211,7 +211,7 @@ function buildOption(priceData) {
                 xAxis: startIdx, yAxis: priceData[startIdx],
                 symbol: 'circle', symbolSize: 10,
                 itemStyle: {color: '#e67e22'},
-                label: {show: true, formatter: '开盘', fontSize: 10, color: '#e67e22', position: 'top'}
+                label: {show: false}
             });
         }
         if (priceData && endIdx < priceData.length && priceData[endIdx] !== null) {
@@ -219,7 +219,7 @@ function buildOption(priceData) {
                 xAxis: endIdx, yAxis: priceData[endIdx],
                 symbol: 'circle', symbolSize: 10,
                 itemStyle: {color: '#e74c3c'},
-                label: {show: true, formatter: '收盘', fontSize: 10, color: '#e74c3c', position: 'top'}
+                label: {show: false}
             });
         }
     }
