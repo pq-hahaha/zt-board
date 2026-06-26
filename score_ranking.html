@@ -586,13 +586,14 @@ function renderTable() {
                          (item.score >= 25 ? 'score-high' : (item.score >= 15 ? 'score-mid' : 'score-low'));
         var r3Display = item.r3 > 0 ? '-' + item.r3 : '0';
 
-        // 分数变化: ↑+2.5 或 ↓-1.0, 无prev数据显示--
+        // 分数变化: ↑+2 或 ↓-1, 无prev数据显示--
         var deltaHtml = '--';
         if (item.delta !== null && item.delta !== undefined) {
-            if (item.delta > 0) {
-                deltaHtml = '<span style="color:#e74c3c">↑+' + item.delta.toFixed(1) + '</span>';
-            } else if (item.delta < 0) {
-                deltaHtml = '<span style="color:#27ae60">↓' + item.delta.toFixed(1) + '</span>';
+            var deltaInt = Math.round(item.delta);
+            if (deltaInt > 0) {
+                deltaHtml = '<span style="color:#e74c3c">↑+' + deltaInt + '</span>';
+            } else if (deltaInt < 0) {
+                deltaHtml = '<span style="color:#27ae60">↓' + deltaInt + '</span>';
             } else {
                 deltaHtml = '<span style="color:#999">--</span>';
             }
