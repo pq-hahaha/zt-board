@@ -270,39 +270,85 @@ function buildOption(priceData) {
 chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
-// === 数据加载: fetch + setTimeout(50)延迟解析 ===
-// 首次: 下载2.4MB gzip → setTimeout(50) → JSON.parse → 2-3秒
-// 二次: 浏览器HTTP缓存(gzip) → 秒级
-// 慢根因: JSON.parse 9MB阻塞主线程; setTimeout让UI先更新"正在解析"
+// === 数据加载: IDB缓存(日期_chongjiuwanshi) + fetch回退 ===
+// 首次: fetch 2.4MB gzip → JSON.parse 9MB → 写IDB → 2-3秒
+// 二次(同一天): IDB命中 → 秒开(跳过fetch+parse)
+// 第二天: IDB key自动过期 → 重新fetch+parse
 var pendingStockCode = '';
+
+function getIDBCacheKey() {
+    var t = new Date();
+    return t.getFullYear() + '-' + ('0'+(t.getMonth()+1)).slice(-2) + '-' + ('0'+t.getDate()).slice(-2) + '_chongjiuwanshi';
+}
+function idbGet(key) {
+    return new Promise(function(resolve) {
+        try {
+            var req = indexedDB.open('cjws_cache', 1);
+            req.onupgradeneeded = function(e) { e.target.result.createObjectStore('stock_data'); };
+            req.onsuccess = function(e) {
+                var db = e.target.result;
+                var tx = db.transaction('stock_data', 'readonly');
+                var getReq = tx.objectStore('stock_data').get(key);
+                getReq.onsuccess = function() { resolve(getReq.result || null); };
+                getReq.onerror = function() { resolve(null); };
+            };
+            req.onerror = function() { resolve(null); };
+        } catch(e) { resolve(null); }
+    });
+}
+function idbPut(key, val) {
+    try {
+        var req = indexedDB.open('cjws_cache', 1);
+        req.onupgradeneeded = function(e) { e.target.result.createObjectStore('stock_data'); };
+        req.onsuccess = function(e) {
+            var db = e.target.result;
+            var tx = db.transaction('stock_data', 'readwrite');
+            tx.objectStore('stock_data').put(val, key);
+        };
+    } catch(e) {}
+}
 
 function loadStockData() {
     var ind = document.getElementById('loadIndicator');
-    if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
+    var cacheKey = getIDBCacheKey();
 
-    fetch(getBaseUrl() + 'breadth_stock_data.json').then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-    }).then(function(txt) {
-        if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
-        setTimeout(function() {
-            try {
-                var d = JSON.parse(txt);
-                allStockData = d.stocks || {};
-                if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
-                fullDataLoaded = true;
-                if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
-                renderWatchlist();
-                updateWatchlistBtn();
-                if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
-            } catch(e) {
-                console.error('JSON.parse failed:', e);
-                if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
-            }
-        }, 50);
-    }).catch(function(e) {
-        console.error('fetch failed:', e);
-        if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
+    idbGet(cacheKey).then(function(cached) {
+        if (cached) {
+            allStockData = cached.stocks || {};
+            if (cached.names) { for (var code in cached.names) { if (!stockNames[code]) stockNames[code] = cached.names[code]; } }
+            fullDataLoaded = true;
+            if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 300); }
+            renderWatchlist();
+            updateWatchlistBtn();
+            if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
+            return;
+        }
+        if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
+        fetch(getBaseUrl() + 'breadth_stock_data.json').then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        }).then(function(txt) {
+            if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
+            setTimeout(function() {
+                try {
+                    var d = JSON.parse(txt);
+                    allStockData = d.stocks || {};
+                    if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
+                    fullDataLoaded = true;
+                    idbPut(cacheKey, d);
+                    if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
+                    renderWatchlist();
+                    updateWatchlistBtn();
+                    if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
+                } catch(e) {
+                    console.error('JSON.parse failed:', e);
+                    if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
+                }
+            }, 50);
+        }).catch(function(e) {
+            console.error('fetch failed:', e);
+            if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
+        });
     });
 }
 loadStockData();
