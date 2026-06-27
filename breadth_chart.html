@@ -1,3 +1,31 @@
+<!--
+============================================
+  赚钱效应图谱 - 正式运营版
+  版本序列号: V20260628.002-jiazaichengsedian-cdnjiasu-xiufujinsedian
+  上线日期: 2026-06-28
+  功能清单:
+    1. 个股5分钟K线(7交易日×48根)
+    2. 涨跌家数双Y轴(15分钟粒度,4时段底色)
+    3. markPoint: 金色点=9:30开盘价, 橙色点=9:35收盘价, 红色点=15:00收盘价
+    4. 观察池(zt_watchlist): 添加/删除/管理/批量删除
+    5. 同步观察池(syncFollowList): 图谱页↔排行页双向同步
+    6. 删除黑名单(WL_REMOVED_KEY): 删除记录用于同步时剔除
+    7. V2评分(stock_basic_scores_v2.json): 按需加载,观察池显示分数
+    8. 拼音首字母搜索(pinyin_initials.json)
+    9. 加载金色点(jiazaichengsedian): 9:30开盘价标注, 稀疏格式breadth_open_prices.json
+    10. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN
+    11. 修复金色点(xiufujinsedian): 修复稀疏开盘价未还原导致金色点挤在首日的问题
+  数据加载:
+    - breadth_stock_data.json (9.5MB) → jsDelivr CDN
+    - breadth_open_prices.json (241KB稀疏) → jsDelivr CDN
+    - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
+    - pinyin_initials.json (79KB) → GitHub Pages
+  版本历史:
+    V20260628.001-jiazaichengsedian-cdnjiasu [已废弃 - 金色点位置bug]
+    V20260627.001 (f86b073) [稳定基线]
+  上线前备份: 8e7f877 (V20260628.001, 有金色点bug)
+============================================
+-->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -99,6 +127,18 @@ var currentPriceData = [1257.71, 1252.5, 1253.0, 1251.0, 1250.3, 1251.98, 1251.0
 var openPriceData = [1258.0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1235.0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1214.31, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1239.0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1222.65, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1207.0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1199.0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
 var allOpenPriceData = {};  // 全市场开盘价数据(从JSON加载)
 var dataLoaded = false;
+
+// === 开盘价稀疏还原 ===
+// JSON里每只股票只存7个有效值(每天1个), 需还原到336值数组
+var OPEN_INDICES = [0, 48, 96, 144, 192, 240, 288];
+function expandOpenPrices(sparseArr) {
+    if (!sparseArr) return [];
+    var full = new Array(336).fill(null);
+    for (var i = 0; i < sparseArr.length && i < OPEN_INDICES.length; i++) {
+        full[OPEN_INDICES[i]] = sparseArr[i];
+    }
+    return full;
+}
 
 var chart = echarts.init(document.getElementById('chart'));
 
@@ -350,7 +390,8 @@ function loadStock() {
     document.getElementById('stockName').textContent = name + '(' + code + ')';
     showBasicScore(code);
     currentPriceData = allStockData[code];
-    openPriceData = allOpenPriceData[code] || [];
+    var sparseOpen = allOpenPriceData[code] || [];
+    openPriceData = expandOpenPrices(sparseOpen);
     chart.setOption(buildOption(currentPriceData));
     updateWatchlistBtn();
 }
