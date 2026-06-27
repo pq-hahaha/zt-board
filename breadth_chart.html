@@ -1,7 +1,7 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260628.001-jiazaichengsedian-cdnjiasu
+  版本序列号: V20260628.002-jiazaichengsedian-cdnjiasu-xiufujinsedian
   上线日期: 2026-06-28
   功能清单:
     1. 个股5分钟K线(7交易日×48根)
@@ -10,16 +10,20 @@
     4. 观察池(zt_watchlist): 添加/删除/管理/批量删除
     5. 同步观察池(syncFollowList): 图谱页↔排行页双向同步
     6. 删除黑名单(WL_REMOVED_KEY): 删除记录用于同步时剔除
-    7. V2评分(stock_basic_scores_v2.json): 按需加载,观察池显示分数
+    7. V2评分(stock_basic_scores_v2.json): 按需加载,观察池显示分数(r1,r2,r3)
     8. 拼音首字母搜索(pinyin_initials.json)
     9. 加载金色点(jiazaichengsedian): 9:30开盘价标注, 稀疏格式breadth_open_prices.json
     10. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN, 解决GitHub Pages国内慢
+    11. 修复金色点(xiufujinsedian): 修复首次加载时金色点不显示(初始化未传openPriceData参数)
   数据加载:
     - breadth_stock_data.json (9.5MB) → jsDelivr CDN
     - breadth_open_prices.json (241KB稀疏) → jsDelivr CDN
     - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
     - pinyin_initials.json (79KB) → GitHub Pages
-  上线前备份: d186331 (V20260627.001)
+  版本历史:
+    V20260628.001-jiazaichengsedian-cdnjiasu [已废弃 - 金色点位置bug]
+    V20260627.001 (f86b073) [稳定基线]
+  上线前备份: 8e7f877 (V20260628.001)
 ============================================
 -->
 <!DOCTYPE html>
@@ -339,7 +343,7 @@ function buildOption(priceData, openPriceData) {
     };
 }
 
-chart.setOption(buildOption(currentPriceData));
+chart.setOption(buildOption(currentPriceData, currentOpenPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
 // === 数据加载: fetch + 浏览器HTTP缓存(无IndexedDB) ===
