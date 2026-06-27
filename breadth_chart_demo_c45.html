@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>赚钱效应图谱 v2</title>
+<script src="https://cdn.staticfile.org/echarts/5.4.3/echarts.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-serif; padding: 10px; }
+.header { text-align: center; margin-bottom: 8px; }
+.header h1 { font-size: 20px; color: #c0392b; }
+.control-bar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.control-bar input {
+    padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
+    font-size: 14px; width: 130px; outline: none;
+}
+.control-bar input:focus { border-color: #3498db; }
+.control-bar button {
+    padding: 5px 16px; background: #3498db; color: #fff; border: none;
+    border-radius: 4px; cursor: pointer; font-size: 14px;
+}
+.control-bar button:hover { background: #2980b9; }
+.control-bar button:disabled { background: #aaa; cursor: default; }
+#stockName { font-size: 14px; color: #555; margin-left: 6px; }
+.legend-bar { display: flex; justify-content: center; gap: 18px; margin: 6px 0; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #666; }
+.legend-color { width: 22px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.08); }
+#chart { width: 100%; height: 560px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.info { text-align: center; font-size: 11px; color: #aaa; margin-top: 6px; }
+.lock-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#1a3c7a 0%,#2E75B5 50%,#375623 100%); z-index:9999; display:flex; justify-content:center; align-items:center; }
+.lock-box { background:#fff; border-radius:16px; padding:40px 48px; box-shadow:0 8px 40px rgba(0,0,0,0.3); text-align:center; max-width:380px; }
+.lock-box h2 { font-size:22px; color:#1a3c7a; margin-bottom:8px; }
+.lock-box p { font-size:13px; color:#888; margin-bottom:24px; }
+.lock-input { width:100%; padding:12px 16px; border:2px solid #ddd; border-radius:10px; font-size:16px; text-align:center; outline:none; transition:border-color 0.3s; }
+.lock-input:focus { border-color:#2E75B5; }
+.lock-btn { width:100%; padding:12px; background:linear-gradient(135deg,#1a3c7a,#2E75B5); color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; margin-top:16px; transition:opacity 0.3s; }
+.lock-btn:hover { opacity:0.85; }
+.lock-err { color:#C00000; font-size:13px; margin-top:12px; display:none; }
+.watchlist-panel { max-width:100%; margin:0 auto 8px; padding:8px 12px; background:#fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+.watchlist-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+.watchlist-title { font-size:13px; color:#555; font-weight:600; }
+.watchlist-count { font-size:12px; color:#888; }
+.wl-mgmt-btn { font-size:11px; padding:2px 8px; background:#95a5a6; color:#fff; border:none; border-radius:3px; cursor:pointer; }
+.wl-mgmt-btn:hover { background:#7f8c8d; }
+.watchlist-items { display:flex; flex-wrap:wrap; gap:6px; max-height:100px; overflow-y:auto; }
+.wl-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#e8f4fd; border:1px solid #b8d8f0; border-radius:12px; font-size:12px; cursor:pointer; transition:all 0.2s; user-select:none; }
+.wl-chip:hover { background:#d0e8fc; border-color:#3498db; }
+.wl-chip.selected { background:#fadbd8; border-color:#e74c3c; }
+.chip-x { color:#aaa; font-size:14px; font-weight:bold; padding:0 2px; cursor:pointer; }
+.chip-x:hover { color:#e74c3c; }
+.wl-del-btn { font-size:11px; padding:2px 8px; background:#e74c3c; color:#fff; border:none; border-radius:3px; cursor:pointer; }
+.wl-del-btn:hover { background:#c0392b; }
+.wl-score { background:#e74c3c; color:#fff; font-size:11px; padding:0 5px; border-radius:3px; margin-left:4px; font-weight:bold; }
+</style>
+</head>
+<body>
+<div class="lock-overlay" id="lockOverlay"><div class="lock-box"><h2>赚钱效应图谱</h2><p>请输入密码查看内容</p><input type="password" class="lock-input" id="lockInput" placeholder="输入密码" autocomplete="off"><button class="lock-btn" id="lockBtn">查看图表</button><div class="lock-err" id="lockErr">密码错误，请重新输入</div></div></div>
+<script>async function sha256(str){const buf=new TextEncoder().encode(str);const hash=await crypto.subtle.digest("SHA-256",buf);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");}document.getElementById("lockBtn").onclick=async function(){var pwd=document.getElementById("lockInput").value;var hash=await sha256(pwd);if(hash==="805503e693c40ae7a50d9d574345f68cd8bca12b97f9f20f74f26c1575662c14"){document.getElementById("lockOverlay").style.display="none";localStorage.setItem("zt_auth","ok")}else{document.getElementById("lockErr").style.display="block";document.getElementById("lockInput").value="";document.getElementById("lockInput").focus()}};document.getElementById("lockInput").onkeydown=function(e){if(e.key==="Enter")document.getElementById("lockBtn").click()};if(localStorage.getItem("zt_auth")==="ok"){document.getElementById("lockOverlay").style.display="none";}</script>
+<div class="header">
+    <h1>赚钱效应图谱 v2</h1>
+    <p style="font-size:13px;color:#888;margin-top:4px;">最新交易日: <b style="color:#e74c3c">2026-06-26</b> | 数据区间: 2026-06-17 ~ 2026-06-26</p>
+</div>
+<div class="control-bar">
+    <div style="position:relative;display:inline-block;">
+        <input type="text" id="stockCode" placeholder="代码/拼音首字母" value="600519" onkeypress="if(event.key==='Enter')loadStock()" oninput="onSearchInput()" onkeydown="onSearchKey(event)" autocomplete="off">
+        <div id="searchDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:300px;overflow-y:auto;background:#fff;border:1px solid #ddd;border-radius:0 0 4px 4px;z-index:1000;box-shadow:0 4px 8px rgba(0,0,0,0.1);"></div>
+    </div>
+    <button onclick="loadStock()">查看</button>
+    <button onclick="addToWatchlist()" id="addWatchlistBtn" style="background:#27ae60;">入观察池</button>
+    <span id="stockName">贵州茅台(600519)</span>
+    <span id="basicScore" style="margin-left:6px;"></span>
+    <span id="loadIndicator" style="font-size:12px;color:#aaa;margin-left:8px;"></span>
+</div>
+<div class="watchlist-panel">
+    <div class="watchlist-header">
+        <span class="watchlist-title">观察池</span>
+        <span class="watchlist-count" id="watchlistCount">0/30</span>
+        <button class="wl-mgmt-btn" id="manageWatchlistBtn" onclick="toggleManageMode()">管理</button>
+        <span id="batchDeleteArea" style="display:none;">
+            <button class="wl-del-btn" id="batchDeleteBtn" onclick="removeFromWatchlistBatch()">删除选中(0)</button>
+            <button class="wl-mgmt-btn" onclick="toggleSelectAll()">全选</button>
+        </span>
+        <button class="wl-mgmt-btn" onclick="syncWatchlist()" style="background:#27ae60;">同步</button>
+    </div>
+    <div class="watchlist-items" id="watchlistItems">
+        <span style="color:#bbb;font-size:12px;">观察池为空，查看个股后点击"入观察池"添加</span>
+    </div>
+</div>
+<div id="chart"></div>
+<div class="info">红线: 个股5分钟收盘价(左轴) | 蓺线: 全市场上涨家数(右轴) | 底色: 4时段赚钱效应</div>
+
+<script>
+// === 嵌入图表数据 (update_pages.py替换) ===
+var xLabels = ["06-17", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-18", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-22", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-23", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-24", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-25", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "06-26", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "11:30", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""];
+var advData = [null, null, 1186, 1186, 1186, 1367, 1367, 1367, 1669, 1669, 1669, 1389, 1389, 1389, 1257, 1257, 1257, 1318, 1318, 1318, 1302, 1302, 1302, 1283, 1283, 1283, 1228, 1228, 1228, 1322, 1322, 1322, 1424, 1424, 1424, 1321, 1321, 1321, 1275, 1275, 1275, 1313, 1313, 1313, 1458, 1458, 1458, 1543, null, null, 1407, 1407, 1407, 1968, 1968, 1968, 2364, 2364, 2364, 2530, 2530, 2530, 2070, 2070, 2070, 1797, 1797, 1797, 1681, 1681, 1681, 1794, 1794, 1794, 1764, 1764, 1764, 1949, 1949, 1949, 1731, 1731, 1731, 1854, 1854, 1854, 1846, 1846, 1846, 1873, 1873, 1873, 1944, 1944, 1944, 1880, null, null, 1133, 1133, 1133, 960, 960, 960, 914, 914, 914, 898, 898, 898, 1011, 1011, 1011, 920, 920, 920, 1023, 1023, 1023, 1150, 1150, 1150, 1435, 1435, 1435, 1470, 1470, 1470, 1439, 1439, 1439, 1804, 1804, 1804, 2362, 2362, 2362, 2256, 2256, 2256, 2461, 2461, 2461, 2632, null, null, 3189, 3189, 3189, 3311, 3311, 3311, 3365, 3365, 3365, 3387, 3387, 3387, 3401, 3401, 3401, 3199, 3199, 3199, 2996, 2996, 2996, 2970, 2970, 2970, 2950, 2950, 2950, 2820, 2820, 2820, 2976, 2976, 2976, 2591, 2591, 2591, 2519, 2519, 2519, 2046, 2046, 2046, 2268, 2268, 2268, 2409, null, null, 1045, 1045, 1045, 1225, 1225, 1225, 937, 937, 937, 979, 979, 979, 854, 854, 854, 786, 786, 786, 800, 800, 800, null, 800, 800, 1153, 1153, 1153, 1329, 1329, 1329, 1321, 1321, 1321, 1282, 1282, 1282, 1353, 1353, 1353, 1323, 1323, 1323, 1291, 1291, 1291, 1343, null, null, 1692, 1692, 1692, 995, 995, 995, 897, 897, 897, 923, 923, 923, 1009, 1009, 1009, 1159, 1159, 1159, 1095, 1095, 1095, 1088, 1088, 1088, 1244, 1244, 1244, 1088, 1088, 1088, 1117, 1117, 1117, 971, 971, 971, 1079, 1079, 1079, 1100, 1100, 1100, 1118, 1118, 1118, 1174, null, null, 1038, 1038, 1038, 754, 754, 754, 877, 877, 877, 995, 995, 995, 806, 806, 806, 626, 626, 626, 655, 655, 655, 709, 709, 709, 851, 851, 851, 816, 816, 816, 872, 872, 872, 903, 903, 903, 720, 720, 720, 757, 757, 757, 805, 805, 805, 665];
+var markAreaPairs = [[{"xAxis": 0}, {"xAxis": 11, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 12}, {"xAxis": 23, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 24}, {"xAxis": 35, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 36}, {"xAxis": 47, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 48}, {"xAxis": 59, "itemStyle": {"color": "rgba(251,226,213,0.18)"}}], [{"xAxis": 60}, {"xAxis": 71, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 72}, {"xAxis": 83, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 84}, {"xAxis": 95, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 96}, {"xAxis": 107, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 108}, {"xAxis": 119, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 120}, {"xAxis": 131, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 132}, {"xAxis": 143, "itemStyle": {"color": "rgba(253,187,167,0.20)"}}], [{"xAxis": 144}, {"xAxis": 155, "itemStyle": {"color": "rgba(255,124,128,0.25)"}}], [{"xAxis": 156}, {"xAxis": 167, "itemStyle": {"color": "rgba(253,187,167,0.20)"}}], [{"xAxis": 168}, {"xAxis": 179, "itemStyle": {"color": "rgba(253,187,167,0.20)"}}], [{"xAxis": 180}, {"xAxis": 191, "itemStyle": {"color": "rgba(181,230,162,0.20)"}}], [{"xAxis": 192}, {"xAxis": 203, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 204}, {"xAxis": 215, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 216}, {"xAxis": 227, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 228}, {"xAxis": 239, "itemStyle": {"color": "rgba(39,83,23,0.30)"}}], [{"xAxis": 240}, {"xAxis": 251, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 252}, {"xAxis": 263, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 264}, {"xAxis": 275, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 276}, {"xAxis": 287, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 288}, {"xAxis": 299, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 300}, {"xAxis": 311, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 312}, {"xAxis": 323, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}], [{"xAxis": 324}, {"xAxis": 335, "itemStyle": {"color": "rgba(13,53,18,0.35)"}}]];
+var dayBoundaries = [0, 48, 96, 144, 192, 240, 288];
+var dayLineIndices = [48, 96, 144, 192, 240, 288];
+var hourLineIndices = [12, 24, 36, 60, 72, 84, 108, 120, 132, 156, 168, 180, 204, 216, 228, 252, 264, 276, 300, 312, 324];
+var dateLabels = ["06-17", "06-18", "06-22", "06-23", "06-24", "06-25", "06-26"];
+var currentPriceData = [1257.71, 1252.5, 1253.0, 1251.0, 1250.3, 1251.98, 1251.01, 1250.52, 1251.0, 1250.27, 1250.12, 1250.22, 1249.11, 1247.0, 1244.99, 1242.7, 1242.01, 1242.6, 1240.13, 1239.39, 1240.04, 1245.07, 1242.1, 1240.92, 1249.6, 1245.84, 1242.46, 1241.2, 1241.2, 1242.78, 1240.01, 1241.07, 1239.93, 1240.88, 1241.0, 1240.46, 1240.34, 1240.57, 1240.41, 1240.38, 1240.09, 1239.96, 1239.9, 1240.28, 1240.02, 1240.05, 1241.0, 1240.0, 1231.0, 1227.34, 1223.89, 1222.02, 1221.19, 1225.0, 1231.88, 1229.34, 1225.15, 1225.5, 1229.43, 1227.0, 1223.07, 1222.02, 1222.84, 1222.04, 1221.9, 1222.0, 1221.02, 1220.73, 1221.15, 1220.14, 1220.4, 1221.4, 1215.33, 1215.85, 1215.45, 1215.79, 1213.89, 1214.3, 1216.44, 1213.8, 1213.15, 1213.11, 1213.69, 1214.07, 1212.16, 1212.53, 1212.0, 1214.75, 1214.93, 1215.9, 1214.51, 1215.82, 1216.99, 1217.38, 1222.55, 1215.0, 1217.1, 1218.74, 1220.0, 1222.52, 1222.68, 1225.6, 1219.11, 1222.31, 1221.49, 1222.55, 1222.49, 1222.28, 1222.93, 1222.3, 1225.01, 1226.06, 1229.89, 1232.54, 1227.88, 1228.5, 1229.7, 1226.0, 1225.12, 1227.01, 1224.85, 1223.58, 1231.6, 1235.69, 1242.8, 1250.0, 1241.66, 1242.86, 1241.3, 1237.06, 1240.23, 1240.0, 1245.89, 1248.91, 1248.0, 1245.04, 1243.9, 1243.74, 1243.17, 1241.15, 1242.0, 1241.32, 1241.89, 1241.41, 1258.24, 1249.9, 1258.9, 1260.99, 1255.0, 1255.38, 1248.53, 1246.97, 1240.05, 1237.8, 1233.0, 1230.06, 1228.96, 1231.65, 1227.77, 1228.21, 1230.0, 1228.02, 1227.5, 1227.03, 1228.61, 1229.84, 1231.76, 1228.61, 1227.01, 1229.09, 1228.96, 1227.01, 1226.4, 1226.41, 1226.0, 1224.02, 1223.12, 1221.8, 1222.0, 1220.57, 1219.51, 1219.42, 1220.76, 1219.66, 1220.4, 1219.54, 1218.77, 1218.99, 1220.93, 1221.65, 1222.06, 1222.45, 1226.69, 1236.99, 1237.82, 1234.8, 1226.09, 1222.3, 1218.74, 1218.5, 1216.61, 1212.92, 1209.65, 1211.98, 1211.11, 1210.91, 1211.08, 1213.34, 1213.92, 1217.2, 1217.0, 1217.08, 1216.0, 1215.37, 1214.76, 1216.06, 1213.7, 1211.81, 1211.66, 1210.47, 1210.1, 1209.62, 1208.22, 1209.23, 1209.25, 1208.65, 1208.98, 1208.89, 1208.79, 1207.7, 1207.78, 1207.6, 1207.73, 1208.87, 1208.08, 1207.81, 1207.91, 1207.96, 1207.98, 1207.68, 1204.9, 1201.33, 1207.0, 1201.03, 1200.09, 1200.56, 1205.2, 1206.93, 1203.93, 1203.46, 1203.02, 1204.66, 1203.92, 1214.96, 1216.0, 1220.12, 1220.51, 1222.57, 1217.39, 1218.4, 1216.0, 1214.56, 1212.0, 1212.72, 1211.0, 1214.3, 1212.8, 1209.29, 1209.07, 1206.95, 1207.69, 1206.01, 1206.57, 1206.72, 1207.27, 1206.85, 1207.14, 1206.5, 1206.51, 1206.79, 1206.63, 1206.63, 1210.3, 1209.41, 1208.22, 1211.54, 1213.0, 1212.1, 1188.32, 1185.56, 1183.4, 1190.4, 1192.19, 1187.36, 1188.19, 1189.02, 1188.6, 1184.99, 1181.88, 1181.25, 1180.62, 1177.68, 1176.0, 1177.0, 1177.0, 1175.6, 1176.8, 1185.11, 1187.19, 1181.2, 1183.23, 1184.98, 1183.66, 1180.99, 1183.82, 1182.26, 1181.33, 1183.0, 1181.69, 1180.12, 1179.78, 1178.99, 1178.39, 1178.86, 1178.12, 1176.17, 1175.6, 1176.47, 1176.12, 1175.68, 1176.99, 1174.86, 1174.29, 1171.82, 1170.05, 1168.63];
+
+// === 全局状态 ===
+var allStockData = {};          // 个股价格数据(从完整JSON加载)
+var stockNames = {};            // 股票名称(从索引加载)
+var fullDataLoaded = false;     // 完整数据是否已加载
+var basicScoresV2 = {};         // V2评分数据
+var basicScoresV2Loaded = false;
+var basicScoresV2Loading = null;
+
+// 默认股票(茅台)数据已在HTML嵌入,直接存入allStockData
+allStockData['600519'] = currentPriceData;
+
+// === 拼音首字母搜索 ===
+var pinyinMap = {};
+var pinyinLoaded = false;
+var searchSelectedIdx = -1;
+var searchResults = [];
+
+function getBaseUrl() {
+    return (window.location.hostname === 'pq-hahaha.github.io')
+        ? 'https://pq-hahaha.github.io/zt-board/'
+        : '';
+}
+
+function loadPinyinMap() {
+    if (pinyinLoaded) return;
+    fetch(getBaseUrl() + 'pinyin_initials.json').then(function(r) { return r.json(); }).then(function(d) {
+        pinyinMap = d;
+        pinyinLoaded = true;
+    }).catch(function(e) { console.warn('pinyin map load failed', e); });
+}
+loadPinyinMap();
+
+function onSearchInput() {
+    updateWatchlistBtn();
+    var val = document.getElementById('stockCode').value.trim().toLowerCase();
+    var dd = document.getElementById('searchDropdown');
+    if (!val) { dd.style.display = 'none'; return; }
+    if (/^\d+$/.test(val) && val.length <= 6) { dd.style.display = 'none'; return; }
+
+    searchResults = [];
+    // 搜索源: 拼音映射(最全) 或 索引(名称) 或 完整数据(名称)
+    for (var code in (pinyinLoaded ? pinyinMap : stockNames)) {
+        var py = (pinyinMap[code] || '').toLowerCase();
+        var name = stockNames[code] || '';
+        if (py.indexOf(val) === 0 || name.indexOf(val) >= 0) {
+            searchResults.push({code: code, name: name, py: pinyinMap[code] || ''});
+            if (searchResults.length >= 30) break;
+        }
+    }
+    if (searchResults.length === 0) { dd.style.display = 'none'; return; }
+    searchSelectedIdx = -1;
+    var html = '';
+    for (var i = 0; i < searchResults.length; i++) {
+        var r = searchResults[i];
+        html += '<div class="search-item" onclick="selectSearch(' + i + ')" style="padding:6px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5;display:flex;justify-content:space-between;">';
+        html += '<span style="color:#333;">' + r.name + '</span>';
+        html += '<span style="color:#999;font-size:12px;">' + r.code + ' (' + r.py + ')</span>';
+        html += '</div>';
+    }
+    dd.innerHTML = html;
+    dd.style.display = 'block';
+}
+
+function onSearchKey(e) {
+    var dd = document.getElementById('searchDropdown');
+    if (dd.style.display === 'none') { if (e.key === 'Enter') loadStock(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); searchSelectedIdx = Math.min(searchSelectedIdx + 1, searchResults.length - 1); highlightSearchItem(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); searchSelectedIdx = Math.max(searchSelectedIdx - 1, -1); highlightSearchItem(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (searchSelectedIdx >= 0) selectSearch(searchSelectedIdx); else if (searchResults.length > 0) selectSearch(0); else loadStock(); }
+    else if (e.key === 'Escape') { dd.style.display = 'none'; }
+}
+
+function highlightSearchItem() {
+    var dd = document.getElementById('searchDropdown');
+    var items = dd.querySelectorAll('.search-item');
+    for (var i = 0; i < items.length; i++) { items[i].style.background = (i === searchSelectedIdx) ? '#e8f4fd' : ''; }
+    if (searchSelectedIdx >= 0 && items[searchSelectedIdx]) items[searchSelectedIdx].scrollIntoView({block: 'nearest'});
+}
+
+function selectSearch(idx) {
+    if (idx < 0 || idx >= searchResults.length) return;
+    var r = searchResults[idx];
+    document.getElementById('stockCode').value = r.code;
+    document.getElementById('searchDropdown').style.display = 'none';
+    loadStock();
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#stockCode') && !e.target.closest('#searchDropdown')) {
+        document.getElementById('searchDropdown').style.display = 'none';
+    }
+});
+
+// === 图表初始化 ===
+var chart = echarts.init(document.getElementById('chart'));
+
+function buildOption(priceData) {
+    var markLineData = [];
+    dayLineIndices.forEach(function(idx) { markLineData.push([{xAxis: idx}, {xAxis: idx}]); });
+
+    // markPoint: 每天开盘(9:30,橙色) + 收盘(15:00,红色)
+    var markPointData = [];
+    for (var d = 0; d < dayBoundaries.length; d++) {
+        var startIdx = dayBoundaries[d];
+        var endIdx = (d + 1 < dayBoundaries.length) ? dayBoundaries[d + 1] - 1 : (priceData ? priceData.length - 1 : startIdx + 47);
+        if (priceData && startIdx < priceData.length && priceData[startIdx] !== null) {
+            markPointData.push({
+                xAxis: startIdx, yAxis: priceData[startIdx],
+                symbol: 'circle', symbolSize: 10,
+                itemStyle: {color: '#e67e22'},
+                label: {show: false}
+            });
+        }
+        if (priceData && endIdx < priceData.length && priceData[endIdx] !== null) {
+            markPointData.push({
+                xAxis: endIdx, yAxis: priceData[endIdx],
+                symbol: 'circle', symbolSize: 10,
+                itemStyle: {color: '#e74c3c'},
+                label: {show: false}
+            });
+        }
+    }
+
+    return {
+        backgroundColor: '#fff',
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(255,255,255,0.96)',
+            borderColor: '#ddd',
+            textStyle: {color: '#333', fontSize: 12},
+            formatter: function(params) {
+                var html = '';
+                for (var p of params) {
+                    if (p.value === null || p.value === undefined) continue;
+                    if (p.seriesName === '个股价格') html += '<span style="color:#e74c3c">价格: ' + p.value.toFixed(2) + '</span><br>';
+                    else if (p.seriesName === '上涨家数') html += '<span style="color:#2980b9">上涨: ' + p.value + '家</span><br>';
+                }
+                var idx = params[0].dataIndex;
+                for (var i = dayBoundaries.length - 1; i >= 0; i--) {
+                    if (idx >= dayBoundaries[i]) { html = '<b style="color:#e67e22">' + dateLabels[i] + '</b><br>' + html; break; }
+                }
+                return html;
+            }
+        },
+        grid: {left: 65, right: 65, top: 25, bottom: 70},
+        xAxis: {
+            type: 'category', data: xLabels,
+            axisLine: {lineStyle: {color: '#bbb'}},
+            axisLabel: {
+                interval: 0,
+                formatter: function(value) {
+                    if (dateLabels.indexOf(value) >= 0) return '{date|' + value + '}';
+                    if (value === '11:30') return '{time|' + value + '}';
+                    return '';
+                },
+                rich: { date: {color: '#C00000', fontSize: 15, fontWeight: 'bold'}, time: {color: '#999', fontSize: 10} }
+            },
+            splitLine: {
+                show: true,
+                interval: function(idx) { return hourLineIndices.includes(idx); },
+                lineStyle: {color: 'rgba(0,0,0,0.12)', type: 'dashed', width: 1}
+            }
+        },
+        yAxis: [
+            { type: 'value', name: '股价', nameTextStyle: {color: '#e74c3c', fontSize: 11}, position: 'left', axisLine: {lineStyle: {color: '#e74c3c'}}, axisLabel: {color: '#e74c3c', fontSize: 11}, splitLine: {lineStyle: {color: 'rgba(0,0,0,0.05)'}}, scale: true },
+            { type: 'value', name: '上涨家数', nameTextStyle: {color: '#2980b9', fontSize: 11}, position: 'right', min: 0, max: 5000, axisLine: {lineStyle: {color: '#2980b9'}}, axisLabel: {color: '#2980b9', fontSize: 11}, splitLine: {show: false} }
+        ],
+        dataZoom: [
+            {type: 'inside', start: 0, end: 100},
+            { type: 'slider', start: 0, end: 100, height: 18, bottom: 8, backgroundColor: '#f0f0f0', borderColor: '#ddd', fillerColor: 'rgba(100,100,150,0.15)', handleStyle: {color: '#999'}, textStyle: {color: '#888'} }
+        ],
+        series: [
+            {
+                name: '个股价格', type: 'line', data: priceData, yAxisIndex: 0,
+                smooth: false, symbol: 'none', connectNulls: true,
+                lineStyle: {color: '#e74c3c', width: 2.5},
+                areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(231,76,60,0.10)'}, {offset: 1, color: 'rgba(231,76,60,0.0)'}]) },
+                markArea: { silent: true, data: markAreaPairs },
+                markLine: { silent: true, symbol: 'none', lineStyle: {type: 'solid', color: '#e67e22', width: 2}, data: markLineData },
+                markPoint: { silent: true, symbol: 'none', data: markPointData }
+            },
+            {
+                name: '上涨家数', type: 'line', data: advData, yAxisIndex: 1,
+                smooth: true, symbol: 'circle', symbolSize: 3,
+                lineStyle: {color: '#2980b9', width: 1.5}, itemStyle: {color: '#2980b9'}, connectNulls: false
+            }
+        ]
+    };
+}
+
+chart.setOption(buildOption(currentPriceData));
+window.addEventListener('resize', function() { chart.resize(); });
+
+// === 数据加载: IDB缓存(日期_chongjiuwanshi) + fetch回退 ===
+// 首次: fetch 2.4MB gzip → JSON.parse 9MB → 写IDB → 2-3秒
+// 二次(同一天): IDB命中 → 秒开(跳过fetch+parse)
+// 第二天: IDB key自动过期 → 重新fetch+parse
+var pendingStockCode = '';
+
+function getIDBCacheKey() {
+    var t = new Date();
+    return t.getFullYear() + '-' + ('0'+(t.getMonth()+1)).slice(-2) + '-' + ('0'+t.getDate()).slice(-2) + '_chongjiuwanshi';
+}
+function idbGet(key) {
+    return new Promise(function(resolve) {
+        try {
+            var req = indexedDB.open('cjws_cache', 1);
+            req.onupgradeneeded = function(e) { e.target.result.createObjectStore('stock_data'); };
+            req.onsuccess = function(e) {
+                var db = e.target.result;
+                var tx = db.transaction('stock_data', 'readonly');
+                var getReq = tx.objectStore('stock_data').get(key);
+                getReq.onsuccess = function() { resolve(getReq.result || null); };
+                getReq.onerror = function() { resolve(null); };
+            };
+            req.onerror = function() { resolve(null); };
+        } catch(e) { resolve(null); }
+    });
+}
+function idbPut(key, val) {
+    try {
+        var req = indexedDB.open('cjws_cache', 1);
+        req.onupgradeneeded = function(e) { e.target.result.createObjectStore('stock_data'); };
+        req.onsuccess = function(e) {
+            var db = e.target.result;
+            var tx = db.transaction('stock_data', 'readwrite');
+            tx.objectStore('stock_data').put(val, key);
+        };
+    } catch(e) {}
+}
+
+function loadStockData() {
+    var ind = document.getElementById('loadIndicator');
+    var cacheKey = getIDBCacheKey();
+
+    idbGet(cacheKey).then(function(cached) {
+        if (cached) {
+            allStockData = cached.stocks || {};
+            if (cached.names) { for (var code in cached.names) { if (!stockNames[code]) stockNames[code] = cached.names[code]; } }
+            fullDataLoaded = true;
+            if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 300); }
+            renderWatchlist();
+            updateWatchlistBtn();
+            if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
+            return;
+        }
+        if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
+        fetch(getBaseUrl() + 'breadth_stock_data.json').then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        }).then(function(txt) {
+            if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
+            setTimeout(function() {
+                try {
+                    var d = JSON.parse(txt);
+                    allStockData = d.stocks || {};
+                    if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
+                    fullDataLoaded = true;
+                    idbPut(cacheKey, d);
+                    if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
+                    renderWatchlist();
+                    updateWatchlistBtn();
+                    if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
+                } catch(e) {
+                    console.error('JSON.parse failed:', e);
+                    if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
+                }
+            }, 50);
+        }).catch(function(e) {
+            console.error('fetch failed:', e);
+            if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
+        });
+    });
+}
+loadStockData();
+
+// --- 个股查看 ---
+function loadStock() {
+    var code = document.getElementById('stockCode').value.trim();
+    if (!code) return;
+    showBasicScoreV2(code);
+    if (allStockData[code]) { renderStockChart(code); return; }
+    if (!fullDataLoaded) {
+        pendingStockCode = code;
+        var name = stockNames[code] || code;
+        document.getElementById('stockName').innerHTML = name + '(' + code + ') <span style="color:#e67e22;font-size:11px;">等待数据...</span>';
+        return;
+    }
+    document.getElementById('stockName').innerHTML = '<span style="color:#e74c3c">未找到: ' + code + '</span>';
+}
+
+function renderStockChart(code) {
+    var name = stockNames[code] || code;
+    document.getElementById('stockName').textContent = name + '(' + code + ')';
+    currentPriceData = allStockData[code];
+    chart.setOption(buildOption(currentPriceData));
+    updateWatchlistBtn();
+}
+
+// === 观察池(含备份恢复机制) ===
+var WL_KEY = 'zt_watchlist';
+var WL_BAK_KEY = 'zt_watchlist_bak';
+var WL_REMOVED_KEY = 'zt_watchlist_removed';
+var WL_MAX = 30;
+var wlMode = 'normal';
+var wlSelected = new Set();
+
+function getWatchlist() {
+    try {
+        var list = JSON.parse(localStorage.getItem(WL_KEY)) || [];
+        // 主key为空时自动从备份恢复
+        if (list.length === 0) {
+            var bak = JSON.parse(localStorage.getItem(WL_BAK_KEY)) || [];
+            if (bak.length > 0) {
+                list = bak;
+                localStorage.setItem(WL_KEY, JSON.stringify(list));
+            }
+        }
+        return list;
+    } catch(e) { return []; }
+}
+
+function saveWatchlist(list) {
+    localStorage.setItem(WL_KEY, JSON.stringify(list));
+    // 双写备份(仅非空时写备份,避免备份覆盖空主)
+    if (list && list.length > 0) {
+        localStorage.setItem(WL_BAK_KEY, JSON.stringify(list));
+    }
+}
+
+function addToWatchlist() {
+    var code = document.getElementById('stockCode').value.trim();
+    if (!code) return;
+    var list = getWatchlist();
+    if (list.length >= WL_MAX) return;
+    for (var i = 0; i < list.length; i++) { if (list[i].code === code) return; }
+    var name = stockNames[code] || code;
+    list.push({code: code, name: name});
+    saveWatchlist(list);
+    renderWatchlist();
+    updateWatchlistBtn();
+}
+
+function removeFromWatchlist(code) {
+    var list = getWatchlist().filter(function(item) { return item.code !== code; });
+    // 写删除记录(同步时用于通知排行页也删除这只票)
+    try {
+        var removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || [];
+        removed.push({code: code, removedAt: new Date().toISOString()});
+        localStorage.setItem(WL_REMOVED_KEY, JSON.stringify(removed));
+    } catch(e) {}
+    saveWatchlist(list);
+    renderWatchlist();
+    updateWatchlistBtn();
+}
+
+function removeFromWatchlistBatch() {
+    if (wlSelected.size === 0) return;
+    var list = getWatchlist().filter(function(item) { return !wlSelected.has(item.code); });
+    saveWatchlist(list);
+    wlSelected.clear();
+    renderWatchlist();
+    updateWatchlistBtn();
+}
+
+function loadFromWatchlist(code) {
+    document.getElementById('stockCode').value = code;
+    loadStock();
+}
+
+function toggleManageMode() {
+    wlMode = wlMode === 'normal' ? 'manage' : 'normal';
+    wlSelected.clear();
+    renderWatchlist();
+}
+
+function toggleSelect(code) {
+    if (wlSelected.has(code)) wlSelected.delete(code);
+    else wlSelected.add(code);
+    renderWatchlist();
+}
+
+function toggleSelectAll() {
+    var list = getWatchlist();
+    if (wlSelected.size === list.length) wlSelected.clear();
+    else { wlSelected.clear(); list.forEach(function(item) { wlSelected.add(item.code); }); }
+    renderWatchlist();
+}
+
+// === 同步观察池与排行关注池 ===
+function syncWatchlist() {
+    // 1. 读两个池 + V2删除记录
+    var wlList = getWatchlist();  // V2活跃池
+    var fkList = [];  // 排行活跃池
+    try { fkList = JSON.parse(localStorage.getItem('score_rank_follow')) || []; } catch(e) {}
+    var removed = [];
+    try { removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || []; } catch(e) {}
+
+    // 2. 合并(取合集), 名称回退: item.name → stockNames
+    var merged = {};  // code -> {code, name, time}
+    wlList.forEach(function(item) {
+        merged[item.code] = {code: item.code, name: item.name || stockNames[item.code] || '', time: item.time || Date.now()};
+    });
+    fkList.forEach(function(item) {
+        if (!merged[item.code]) {
+            merged[item.code] = {code: item.code, name: item.name || stockNames[item.code] || '', time: item.time || Date.now()};
+        }
+    });
+
+    // 3. 剔除删除记录中的票
+    var removedCodes = {};
+    removed.forEach(function(r) { removedCodes[r.code] = true; });
+    for (var code in merged) {
+        if (removedCodes[code]) delete merged[code];
+    }
+
+    // 4. 转数组 + 按分数排序(低→高)准备裁剪
+    var mergedList = [];
+    for (var code in merged) mergedList.push(merged[code]);
+
+    if (mergedList.length > WL_MAX) {
+        // 加载评分数据用于排序
+        loadBasicScoresV2().then(function() {
+            // 按分数从低到高排序,同分按关注时间早→晚
+            mergedList.sort(function(a, b) {
+                var sa = (basicScoresV2[a.code] && basicScoresV2[a.code].s) ? basicScoresV2[a.code].s : 0;
+                var sb = (basicScoresV2[b.code] && basicScoresV2[b.code].s) ? basicScoresV2[b.code].s : 0;
+                if (sa !== sb) return sa - sb;
+                return (a.time || 0) - (b.time || 0);
+            });
+            // 保留最高的WL_MAX只
+            mergedList = mergedList.slice(-WL_MAX);
+            // 写回两个池
+            saveWatchlist(mergedList);
+            try { localStorage.setItem('score_rank_follow', JSON.stringify(mergedList)); } catch(e) {}
+            // 清空删除记录
+            try { localStorage.setItem(WL_REMOVED_KEY, '[]'); } catch(e) {}
+            renderWatchlist();
+            updateWatchlistBtn();
+            alert('已同步 ' + mergedList.length + ' 只股票(自动裁剪至' + WL_MAX + '只)');
+        });
+        return;
+    }
+
+    // 5. 未超限,直接写回
+    saveWatchlist(mergedList);
+    try { localStorage.setItem('score_rank_follow', JSON.stringify(mergedList)); } catch(e) {}
+    try { localStorage.setItem(WL_REMOVED_KEY, '[]'); } catch(e) {}
+    renderWatchlist();
+    updateWatchlistBtn();
+    alert('已同步 ' + mergedList.length + ' 只股票');
+}
+
+function updateWatchlistBtn() {
+    var list = getWatchlist();
+    var countEl = document.getElementById('watchlistCount');
+    if (countEl) countEl.textContent = list.length + '/' + WL_MAX;
+    var btn = document.getElementById('addWatchlistBtn');
+    if (!btn) return;
+    var code = document.getElementById('stockCode').value.trim();
+    var exists = list.some(function(item) { return item.code === code; });
+    if (list.length >= WL_MAX) {
+        btn.disabled = true; btn.textContent = '池满'; btn.style.background = '#aaa';
+    } else if (exists) {
+        btn.disabled = true; btn.textContent = '已在池中'; btn.style.background = '#aaa';
+    } else {
+        btn.disabled = false; btn.textContent = '入观察池'; btn.style.background = '#27ae60';
+    }
+}
+
+function renderWatchlist() {
+    var list = getWatchlist();
+    var container = document.getElementById('watchlistItems');
+    if (!container) return;
+    var manageBtn = document.getElementById('manageWatchlistBtn');
+    var batchArea = document.getElementById('batchDeleteArea');
+    var batchBtn = document.getElementById('batchDeleteBtn');
+    if (manageBtn) manageBtn.textContent = wlMode === 'normal' ? '管理' : '退出管理';
+    if (batchArea) batchArea.style.display = wlMode === 'manage' ? 'inline' : 'none';
+    if (batchBtn) batchBtn.textContent = '删除选中(' + wlSelected.size + ')';
+    if (list.length === 0) {
+        container.innerHTML = '<span style="color:#bbb;font-size:12px;">观察池为空，查看个股后点击"入观察池"添加</span>';
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+        var item = list[i];
+        // 名称: 优先从索引取(最新), 否则用localStorage存的
+        var displayName = stockNames[item.code] || item.name || item.code;
+        var sel = wlSelected.has(item.code);
+        if (wlMode === 'manage') {
+            html += '<div class="wl-chip' + (sel ? ' selected' : '') + '" onclick="toggleSelect(\'' + item.code + '\')">';
+            html += '<input type="checkbox" ' + (sel ? 'checked' : '') + ' style="margin-right:3px;pointer-events:none;">';
+            html += displayName + '(' + item.code + ')</div>';
+        } else {
+            html += '<div class="wl-chip" onclick="loadFromWatchlist(\'' + item.code + '\')">';
+            html += '<span>' + displayName + '(' + item.code + ')</span>';
+            var scoreObj = basicScoresV2[item.code];
+            if (scoreObj && scoreObj.s > 0) {
+                html += '<span class="wl-score">' + scoreObj.s + '分</span>';
+            }
+            html += '<span class="chip-x" onclick="event.stopPropagation();removeFromWatchlist(\'' + item.code + '\')">&times;</span></div>';
+        }
+    }
+    container.innerHTML = html;
+}
+
+// === V2评分(按需加载) ===
+
+function loadBasicScoresV2() {
+    if (basicScoresV2Loaded) return Promise.resolve();
+    if (basicScoresV2Loading) return basicScoresV2Loading;
+    basicScoresV2Loading = fetch(getBaseUrl() + 'stock_basic_scores_v2.json').then(function(r) { return r.json(); }).then(function(d) {
+        basicScoresV2 = d.scores;
+        basicScoresV2Loaded = true;
+        basicScoresV2Loading = null;
+        // 评分加载后刷新观察池(分数显示)
+        renderWatchlist();
+    }).catch(function(e) { console.warn('V2 scores load failed:', e); basicScoresV2Loading = null; });
+    return basicScoresV2Loading;
+}
+
+function showBasicScoreV2(code) {
+    loadBasicScoresV2().then(function() {
+        var el = document.getElementById('basicScore');
+        if (!el || !basicScoresV2[code]) { if (el) el.innerHTML = ''; return; }
+        var s = basicScoresV2[code];
+        var score = s.s, r1 = s.r1 || 0, r2 = s.r2 || 0, r3 = s.r3 || 0;
+        var r3d = r3 > 0 ? '-' + r3 : '0';
+        if (score > 0) {
+            el.innerHTML = '<span style="background:#e74c3c;color:#fff;padding:1px 8px;border-radius:3px;font-weight:bold;font-size:13px;">' + score + '分(' + r1 + ',' + r2 + ',' + r3d + ')</span>';
+        } else {
+            el.innerHTML = '<span style="color:#ccc;font-size:12px;">0分</span>';
+        }
+    });
+}
+
+// === 页面初始化 ===
+// 观察池立即渲染(用localStorage数据,不等索引)
+renderWatchlist();
+// 评分加载后刷新观察池(分数显示)
+loadBasicScoresV2();
+
+</script>
+</body>
+</html>
