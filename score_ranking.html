@@ -1,3 +1,24 @@
+<!--
+============================================
+  个股评分排行 - 正式运营版
+  版本序列号: V20260628.001-cdnjiasu
+  上线日期: 2026-06-28
+  功能清单:
+    1. V2评分排行(总分/维度r1,r2,r3)
+    2. 分数变化(↑↓箭头+delta, 对比v2_prev)
+    3. 关注池(score_rank_follow, 与图谱页观察池双向同步)
+    4. 拼音首字母搜索(pinyin_initials.json)
+    5. 股票池名称回退(stock_pool.json)
+    6. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN
+  数据加载:
+    - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
+    - stock_basic_scores_v2_prev.json (382KB) → jsDelivr CDN
+    - stock_pool.json (300KB) → jsDelivr CDN
+    - pinyin_initials.json (79KB) → GitHub Pages
+  注意: 变化数据/箭头需v2和v2_prev为不同交易日数据才显示
+  上线前备份: 370ef75 (V20260627.001)
+============================================
+-->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
