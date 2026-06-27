@@ -26,7 +26,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>赚钱效应图谱 v2</title>
+<title>赚钱效应图谱 DEMO</title>
 <script src="https://cdn.staticfile.org/echarts/5.4.3/echarts.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -46,9 +46,6 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
 .control-bar button:hover { background: #2980b9; }
 .control-bar button:disabled { background: #aaa; cursor: default; }
 #stockName { font-size: 14px; color: #555; margin-left: 6px; }
-.legend-bar { display: flex; justify-content: center; gap: 18px; margin: 6px 0; flex-wrap: wrap; }
-.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #666; }
-.legend-color { width: 22px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.08); }
 #chart { width: 100%; height: 560px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .info { text-align: center; font-size: 11px; color: #aaa; margin-top: 6px; }
 .lock-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#1a3c7a 0%,#2E75B5 50%,#375623 100%); z-index:9999; display:flex; justify-content:center; align-items:center; }
@@ -81,7 +78,7 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
 <div class="lock-overlay" id="lockOverlay"><div class="lock-box"><h2>赚钱效应图谱</h2><p>请输入密码查看内容</p><input type="password" class="lock-input" id="lockInput" placeholder="输入密码" autocomplete="off"><button class="lock-btn" id="lockBtn">查看图表</button><div class="lock-err" id="lockErr">密码错误，请重新输入</div></div></div>
 <script>async function sha256(str){const buf=new TextEncoder().encode(str);const hash=await crypto.subtle.digest("SHA-256",buf);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");}document.getElementById("lockBtn").onclick=async function(){var pwd=document.getElementById("lockInput").value;var hash=await sha256(pwd);if(hash==="805503e693c40ae7a50d9d574345f68cd8bca12b97f9f20f74f26c1575662c14"){document.getElementById("lockOverlay").style.display="none";localStorage.setItem("zt_auth","ok")}else{document.getElementById("lockErr").style.display="block";document.getElementById("lockInput").value="";document.getElementById("lockInput").focus()}};document.getElementById("lockInput").onkeydown=function(e){if(e.key==="Enter")document.getElementById("lockBtn").click()};if(localStorage.getItem("zt_auth")==="ok"){document.getElementById("lockOverlay").style.display="none";}</script>
 <div class="header">
-    <h1>赚钱效应图谱 v2</h1>
+    <h1>赚钱效应图谱 DEMO</h1>
     <p style="font-size:13px;color:#888;margin-top:4px;">最新交易日: <b style="color:#e74c3c">2026-06-26</b> | 数据区间: 2026-06-17 ~ 2026-06-26</p>
 </div>
 <div class="control-bar">
@@ -111,7 +108,7 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
     </div>
 </div>
 <div id="chart"></div>
-<div class="info">红线: 个股5分钟收盘价(左轴) | 蓺线: 全市场上涨家数(右轴) | 底色: 4时段赚钱效应</div>
+<div class="info">红线: 个股5分钟收盘价(左轴) | 蓝线: 全市场上涨家数(右轴) | 金色点: 9:30开盘价 | 橙色点: 9:35收盘价 | 红色点: 15:00收盘价 | 底色: 4时段赚钱效应</div>
 
 <script>
 // === 嵌入图表数据 (update_pages.py替换) ===
