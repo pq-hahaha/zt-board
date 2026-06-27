@@ -77,6 +77,7 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
         <span class="watchlist-title">观察池</span>
         <span class="watchlist-count" id="watchlistCount">0/30</span>
         <button class="wl-mgmt-btn" id="manageWatchlistBtn" onclick="toggleManageMode()">管理</button>
+        <button class="wl-mgmt-btn" id="syncWatchlistBtn" onclick="syncFollowList()">同步观察池</button>
         <span id="batchDeleteArea" style="display:none;">
             <button class="wl-del-btn" id="batchDeleteBtn" onclick="removeFromWatchlistBatch()">删除选中(0)</button>
             <button class="wl-mgmt-btn" onclick="toggleSelectAll()">全选</button>
@@ -402,6 +403,7 @@ function renderStockChart(code) {
 // === 观察池(含备份恢复机制) ===
 var WL_KEY = 'zt_watchlist';
 var WL_BAK_KEY = 'zt_watchlist_bak';
+var WL_REMOVED_KEY = 'zt_watchlist_removed';
 var WL_MAX = 30;
 var wlMode = 'normal';
 var wlSelected = new Set();
@@ -445,12 +447,28 @@ function addToWatchlist() {
 function removeFromWatchlist(code) {
     var list = getWatchlist().filter(function(item) { return item.code !== code; });
     saveWatchlist(list);
+    // 写入删除黑名单
+    try {
+        var removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || [];
+        if (removed.indexOf(code) === -1) {
+            removed.push(code);
+            localStorage.setItem(WL_REMOVED_KEY, JSON.stringify(removed));
+        }
+    } catch(e) {}
     renderWatchlist();
     updateWatchlistBtn();
 }
 
 function removeFromWatchlistBatch() {
     if (wlSelected.size === 0) return;
+    // 写入删除黑名单
+    try {
+        var removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || [];
+        wlSelected.forEach(function(code) {
+            if (removed.indexOf(code) === -1) removed.push(code);
+        });
+        localStorage.setItem(WL_REMOVED_KEY, JSON.stringify(removed));
+    } catch(e) {}
     var list = getWatchlist().filter(function(item) { return !wlSelected.has(item.code); });
     saveWatchlist(list);
     wlSelected.clear();
@@ -534,6 +552,53 @@ function renderWatchlist() {
         }
     }
     container.innerHTML = html;
+}
+
+// === 同步观察池(图谱页版本) ===
+function getScoreRankFollow() {
+    try {
+        return JSON.parse(localStorage.getItem('score_rank_follow')) || [];
+    } catch(e) { return []; }
+}
+
+function saveScoreRankFollow(list) {
+    localStorage.setItem('score_rank_follow', JSON.stringify(list));
+}
+
+function syncFollowList() {
+    var btn = document.getElementById('syncWatchlistBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '同步中...'; }
+    loadBasicScoresV2().then(function() {
+        var wlList = getWatchlist();
+        var srList = getScoreRankFollow();
+        var map = {};
+        wlList.forEach(function(item) { map[item.code] = item; });
+        srList.forEach(function(item) {
+            if (!map[item.code]) map[item.code] = item;
+        });
+        var merged = [];
+        for (var code in map) merged.push(map[code]);
+        var removed = [];
+        try { removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || []; } catch(e) {}
+        if (removed.length > 0) {
+            merged = merged.filter(function(item) { return removed.indexOf(item.code) === -1; });
+        }
+        if (merged.length > WL_MAX) {
+            merged.sort(function(a, b) {
+                var sa = (basicScoresV2[a.code] && basicScoresV2[a.code].s) || 0;
+                var sb = (basicScoresV2[b.code] && basicScoresV2[b.code].s) || 0;
+                return sb - sa;
+            });
+            merged = merged.slice(0, WL_MAX);
+        }
+        saveWatchlist(merged);
+        saveScoreRankFollow(merged);
+        localStorage.setItem(WL_REMOVED_KEY, JSON.stringify([]));
+        renderWatchlist();
+        updateWatchlistBtn();
+        if (btn) { btn.disabled = false; btn.textContent = '同步观察池'; }
+        alert('同步完成，观察池共' + merged.length + '只');
+    });
 }
 
 // === V2评分(按需加载) ===
