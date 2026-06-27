@@ -1,19 +1,25 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260627.001
-  基线git: f86b073
+  版本序列号: V20260628.001-jiazaichengsedian-cdnjiasu
+  上线日期: 2026-06-28
   功能清单:
     1. 个股5分钟K线(7交易日×48根)
     2. 涨跌家数双Y轴(15分钟粒度,4时段底色)
-    3. markPoint: 橙色点=开盘价, 红色点=收盘价
+    3. markPoint: 金色点=9:30开盘价, 橙色点=9:35收盘价, 红色点=15:00收盘价
     4. 观察池(zt_watchlist): 添加/删除/管理/批量删除
     5. 同步观察池(syncFollowList): 图谱页↔排行页双向同步
     6. 删除黑名单(WL_REMOVED_KEY): 删除记录用于同步时剔除
     7. V2评分(stock_basic_scores_v2.json): 按需加载,观察池显示分数
     8. 拼音首字母搜索(pinyin_initials.json)
-  上线日期: 2026-06-27
-  修改前必须备份,修改必须走demo测试流程
+    9. 加载金色点(jiazaichengsedian): 9:30开盘价标注, 稀疏格式breadth_open_prices.json
+    10. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN, 解决GitHub Pages国内慢
+  数据加载:
+    - breadth_stock_data.json (9.5MB) → jsDelivr CDN
+    - breadth_open_prices.json (241KB稀疏) → jsDelivr CDN
+    - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
+    - pinyin_initials.json (79KB) → GitHub Pages
+  上线前备份: d186331 (V20260627.001)
 ============================================
 -->
 <!DOCTYPE html>
@@ -41,9 +47,6 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
 .control-bar button:hover { background: #2980b9; }
 .control-bar button:disabled { background: #aaa; cursor: default; }
 #stockName { font-size: 14px; color: #555; margin-left: 6px; }
-.legend-bar { display: flex; justify-content: center; gap: 18px; margin: 6px 0; flex-wrap: wrap; }
-.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #666; }
-.legend-color { width: 22px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.08); }
 #chart { width: 100%; height: 560px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .info { text-align: center; font-size: 11px; color: #aaa; margin-top: 6px; }
 .lock-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#1a3c7a 0%,#2E75B5 50%,#375623 100%); z-index:9999; display:flex; justify-content:center; align-items:center; }
@@ -106,7 +109,7 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
     </div>
 </div>
 <div id="chart"></div>
-<div class="info">红线: 个股5分钟收盘价(左轴) | 蓺线: 全市场上涨家数(右轴) | 底色: 4时段赚钱效应</div>
+<div class="info">红线: 个股5分钟收盘价(左轴) | 蓝线: 全市场上涨家数(右轴) | 金色点: 9:30开盘价 | 橙色点: 9:35收盘价 | 红色点: 15:00收盘价 | 底色: 4时段赚钱效应</div>
 
 <script>
 // === 嵌入图表数据 (update_pages.py替换) ===
@@ -121,11 +124,25 @@ var currentPriceData = [1257.71, 1252.5, 1253.0, 1251.0, 1250.3, 1251.98, 1251.0
 
 // === 全局状态 ===
 var allStockData = {};          // 个股价格数据(从完整JSON加载)
+var allOpenPriceData = {};      // 开盘价数据(稀疏格式, 从JSON加载)
+var currentOpenPriceData = [];  // 当前股票的开盘价(还原后336值数组)
 var stockNames = {};            // 股票名称(从索引加载)
 var fullDataLoaded = false;     // 完整数据是否已加载
 var basicScoresV2 = {};         // V2评分数据
 var basicScoresV2Loaded = false;
 var basicScoresV2Loading = null;
+
+// === 开盘价稀疏还原 ===
+// JSON里每只股票只存7个有效值(每天1个), 需还原到336值数组
+var OPEN_INDICES = [0, 48, 96, 144, 192, 240, 288];
+function expandOpenPrices(sparseArr) {
+    if (!sparseArr) return [];
+    var full = new Array(336).fill(null);
+    for (var i = 0; i < sparseArr.length && i < OPEN_INDICES.length; i++) {
+        full[OPEN_INDICES[i]] = sparseArr[i];
+    }
+    return full;
+}
 
 // 默认股票(茅台)数据已在HTML嵌入,直接存入allStockData
 allStockData['600519'] = currentPriceData;
@@ -141,6 +158,8 @@ function getBaseUrl() {
         ? 'https://pq-hahaha.github.io/zt-board/'
         : '';
 }
+// CDN: 大数据文件走jsDelivr(国内CDN加速), 小文件走GitHub Pages
+var CDN_BASE = 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
 
 function loadPinyinMap() {
     if (pinyinLoaded) return;
@@ -215,15 +234,25 @@ document.addEventListener('click', function(e) {
 // === 图表初始化 ===
 var chart = echarts.init(document.getElementById('chart'));
 
-function buildOption(priceData) {
+function buildOption(priceData, openPriceData) {
     var markLineData = [];
     dayLineIndices.forEach(function(idx) { markLineData.push([{xAxis: idx}, {xAxis: idx}]); });
 
-    // markPoint: 每天开盘(9:30,橙色) + 收盘(15:00,红色)
+    // markPoint: 橙色=9:35收盘价, 红色=15:00收盘价, 金色=9:30开盘价
     var markPointData = [];
     for (var d = 0; d < dayBoundaries.length; d++) {
         var startIdx = dayBoundaries[d];
         var endIdx = (d + 1 < dayBoundaries.length) ? dayBoundaries[d + 1] - 1 : (priceData ? priceData.length - 1 : startIdx + 47);
+        // 金色点: 9:30开盘价(来自openPriceData)
+        if (openPriceData && startIdx < openPriceData.length && openPriceData[startIdx] !== null) {
+            markPointData.push({
+                xAxis: startIdx, yAxis: openPriceData[startIdx],
+                symbol: 'circle', symbolSize: 8,
+                itemStyle: {color: '#FFD700', borderColor: '#fff', borderWidth: 1},
+                label: {show: false}
+            });
+        }
+        // 橙色点: 9:35收盘价
         if (priceData && startIdx < priceData.length && priceData[startIdx] !== null) {
             markPointData.push({
                 xAxis: startIdx, yAxis: priceData[startIdx],
@@ -232,6 +261,7 @@ function buildOption(priceData) {
                 label: {show: false}
             });
         }
+        // 红色点: 15:00收盘价
         if (priceData && endIdx < priceData.length && priceData[endIdx] !== null) {
             markPointData.push({
                 xAxis: endIdx, yAxis: priceData[endIdx],
@@ -312,88 +342,49 @@ function buildOption(priceData) {
 chart.setOption(buildOption(currentPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
-// === 数据加载: IDB缓存(日期_chongjiuwanshi) + fetch回退 ===
-// 首次: fetch 2.4MB gzip → JSON.parse 9MB → 写IDB → 2-3秒
-// 二次(同一天): IDB命中 → 秒开(跳过fetch+parse)
-// 第二天: IDB key自动过期 → 重新fetch+parse
+// === 数据加载: fetch + 浏览器HTTP缓存(无IndexedDB) ===
+// 首次: fetch 2.4MB gzip → setTimeout(50) → JSON.parse 9MB → 2-3秒
+// 二次: 浏览器HTTP缓存命中 → 秒级
 var pendingStockCode = '';
-
-function getIDBCacheKey() {
-    var t = new Date();
-    return t.getFullYear() + '-' + ('0'+(t.getMonth()+1)).slice(-2) + '-' + ('0'+t.getDate()).slice(-2) + '_chongjiuwanshi';
-}
-function idbGet(key) {
-    return new Promise(function(resolve) {
-        try {
-            var req = indexedDB.open('cjws_cache', 1);
-            req.onupgradeneeded = function(e) { e.target.result.createObjectStore('stock_data'); };
-            req.onsuccess = function(e) {
-                var db = e.target.result;
-                var tx = db.transaction('stock_data', 'readonly');
-                var getReq = tx.objectStore('stock_data').get(key);
-                getReq.onsuccess = function() { resolve(getReq.result || null); };
-                getReq.onerror = function() { resolve(null); };
-            };
-            req.onerror = function() { resolve(null); };
-        } catch(e) { resolve(null); }
-    });
-}
-function idbPut(key, val) {
-    try {
-        var req = indexedDB.open('cjws_cache', 1);
-        req.onupgradeneeded = function(e) { e.target.result.createObjectStore('stock_data'); };
-        req.onsuccess = function(e) {
-            var db = e.target.result;
-            var tx = db.transaction('stock_data', 'readwrite');
-            tx.objectStore('stock_data').put(val, key);
-        };
-    } catch(e) {}
-}
 
 function loadStockData() {
     var ind = document.getElementById('loadIndicator');
-    var cacheKey = getIDBCacheKey();
-
-    idbGet(cacheKey).then(function(cached) {
-        if (cached) {
-            allStockData = cached.stocks || {};
-            if (cached.names) { for (var code in cached.names) { if (!stockNames[code]) stockNames[code] = cached.names[code]; } }
-            fullDataLoaded = true;
-            if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 300); }
-            renderWatchlist();
-            updateWatchlistBtn();
-            if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
-            return;
-        }
-        if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
-        fetch(getBaseUrl() + 'breadth_stock_data.json').then(function(r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.text();
-        }).then(function(txt) {
-            if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
-            setTimeout(function() {
-                try {
-                    var d = JSON.parse(txt);
-                    allStockData = d.stocks || {};
-                    if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
-                    fullDataLoaded = true;
-                    idbPut(cacheKey, d);
-                    if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
-                    renderWatchlist();
-                    updateWatchlistBtn();
-                    if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
-                } catch(e) {
-                    console.error('JSON.parse failed:', e);
-                    if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
-                }
-            }, 50);
-        }).catch(function(e) {
-            console.error('fetch failed:', e);
-            if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
-        });
+    if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
+    fetch(CDN_BASE + 'breadth_stock_data.json').then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+    }).then(function(txt) {
+        if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
+        setTimeout(function() {
+            try {
+                var d = JSON.parse(txt);
+                allStockData = d.stocks || {};
+                if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
+                fullDataLoaded = true;
+                if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
+                renderWatchlist();
+                updateWatchlistBtn();
+                if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
+            } catch(e) {
+                console.error('JSON.parse failed:', e);
+                if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
+            }
+        }, 50);
+    }).catch(function(e) {
+        console.error('fetch failed:', e);
+        if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
     });
 }
 loadStockData();
+
+// 加载开盘价数据(稀疏格式, 仅241KB, 非阻塞, 不影响主图)
+fetch(CDN_BASE + 'breadth_open_prices.json').then(function(r) { return r.json(); }).then(function(d) {
+    allOpenPriceData = d;
+    // 刷新当前股票以显示金色点
+    var code = document.getElementById('stockCode').value.trim();
+    if (code && allStockData[code]) renderStockChart(code);
+    else if (allStockData['600519']) renderStockChart('600519');
+}).catch(function(e) { console.warn('open prices load failed', e); });
 
 // --- 个股查看 ---
 function loadStock() {
@@ -414,7 +405,8 @@ function renderStockChart(code) {
     var name = stockNames[code] || code;
     document.getElementById('stockName').textContent = name + '(' + code + ')';
     currentPriceData = allStockData[code];
-    chart.setOption(buildOption(currentPriceData));
+    currentOpenPriceData = expandOpenPrices(allOpenPriceData[code]);
+    chart.setOption(buildOption(currentPriceData, currentOpenPriceData));
     updateWatchlistBtn();
 }
 
@@ -624,7 +616,7 @@ function syncFollowList() {
 function loadBasicScoresV2() {
     if (basicScoresV2Loaded) return Promise.resolve();
     if (basicScoresV2Loading) return basicScoresV2Loading;
-    basicScoresV2Loading = fetch(getBaseUrl() + 'stock_basic_scores_v2.json').then(function(r) { return r.json(); }).then(function(d) {
+    basicScoresV2Loading = fetch(CDN_BASE + 'stock_basic_scores_v2.json').then(function(r) { return r.json(); }).then(function(d) {
         basicScoresV2 = d.scores;
         basicScoresV2Loaded = true;
         basicScoresV2Loading = null;
