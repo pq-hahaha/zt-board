@@ -1,7 +1,7 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260628.002-jiazaichengsedian-cdnjiasu-xiufujinsedian
+  版本序列号: V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys
   上线日期: 2026-06-28
   功能清单:
     1. 个股5分钟K线(7交易日×48根)
@@ -15,15 +15,17 @@
     9. 加载金色点(jiazaichengsedian): 9:30开盘价标注, 稀疏格式breadth_open_prices.json
     10. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN, 解决GitHub Pages国内慢
     11. 修复金色点(xiufujinsedian): 修复首次加载时金色点不显示(初始化未传openPriceData参数)
+    12. 同步按钮颜色(tongbuyscys): 同步观察池按钮改为绿色(与入观察池一致)
   数据加载:
     - breadth_stock_data.json (9.5MB) → jsDelivr CDN
     - breadth_open_prices.json (241KB稀疏) → jsDelivr CDN
     - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
     - pinyin_initials.json (79KB) → GitHub Pages
   版本历史:
+    V20260628.002-jiazaichengsedian-cdnjiasu-xiufujinsedian [已废弃]
     V20260628.001-jiazaichengsedian-cdnjiasu [已废弃 - 金色点位置bug]
     V20260627.001 (f86b073) [稳定基线]
-  上线前备份: 8e7f877 (V20260628.001)
+  上线前备份: e94753b (V20260628.002)
 ============================================
 -->
 <!DOCTYPE html>
@@ -102,7 +104,7 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
         <span class="watchlist-title">观察池</span>
         <span class="watchlist-count" id="watchlistCount">0/30</span>
         <button class="wl-mgmt-btn" id="manageWatchlistBtn" onclick="toggleManageMode()">管理</button>
-        <button class="wl-mgmt-btn" id="syncWatchlistBtn" onclick="syncFollowList()">同步观察池</button>
+        <button class="wl-mgmt-btn" id="syncWatchlistBtn" onclick="syncFollowList()" style="background:#27ae60;">同步观察池</button>
         <span id="batchDeleteArea" style="display:none;">
             <button class="wl-del-btn" id="batchDeleteBtn" onclick="removeFromWatchlistBatch()">删除选中(0)</button>
             <button class="wl-mgmt-btn" onclick="toggleSelectAll()">全选</button>
@@ -581,7 +583,7 @@ function saveScoreRankFollow(list) {
 
 function syncFollowList() {
     var btn = document.getElementById('syncWatchlistBtn');
-    if (btn) { btn.disabled = true; btn.textContent = '同步中...'; }
+    if (btn) { btn.disabled = true; btn.textContent = '同步中...'; btn.style.background = '#aaa'; }
     loadBasicScoresV2().then(function() {
         var wlList = getWatchlist();
         var srList = getScoreRankFollow();
@@ -610,7 +612,7 @@ function syncFollowList() {
         localStorage.setItem(WL_REMOVED_KEY, JSON.stringify([]));
         renderWatchlist();
         updateWatchlistBtn();
-        if (btn) { btn.disabled = false; btn.textContent = '同步观察池'; }
+        if (btn) { btn.disabled = false; btn.textContent = '同步观察池'; btn.style.background = '#27ae60'; }
         alert('同步完成，观察池共' + merged.length + '只');
     });
 }
