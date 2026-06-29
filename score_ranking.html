@@ -1,3 +1,28 @@
+<!--
+============================================
+  个股评分排行 - 正式运营版
+  版本序列号: V20260628.002-cdnjiasu-guanzhutongbu
+  上线日期: 2026-06-28
+  功能清单:
+    1. V2评分排行(总分/维度r1,r2,r3)
+    2. 分数变化(↑↓箭头+delta, 对比v2_prev)
+    3. 关注池(score_rank_follow, 与图谱页观察池双向同步)
+    4. 拼音首字母搜索(pinyin_initials.json)
+    5. 股票池名称回退(stock_pool.json)
+    6. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN
+    7. 关注同步(guanzhutongbu): toggleFollow与图谱页联动
+       - 关注: 同时加入图谱观察池(zt_watchlist)
+       - 取消: 写黑名单(zt_watchlist_removed) + 从图谱观察池移除
+  数据加载:
+    - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
+    - stock_basic_scores_v2_prev.json (382KB) → jsDelivr CDN
+    - stock_pool.json (300KB) → jsDelivr CDN
+    - pinyin_initials.json (79KB) → GitHub Pages
+  版本历史:
+    V20260628.001-cdnjiasu [基线]
+  上线前备份: b98a675 (V20260628.001)
+============================================
+-->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -164,7 +189,7 @@ function loadBasicScoresV2() {
     }
     // 未加载, 直接fetch评分数据(不重新渲染表格)
     var SCORE_VERSION = 'v2_20260627';
-    return fetch(getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION)
+    return fetch(CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION)
         .then(function(r) { return r.json(); })
         .then(function(d) {
             basicScoresV2 = d.scores || {};
@@ -219,10 +244,37 @@ function toggleFollow(code) {
             break;
         }
     }
-    if (!found) {
-        // 满30只,不允许添加(静默忽略)
+    if (found) {
+        // === 取消关注 = 删除: 写黑名单 + 从图谱观察池移除 ===
+        try {
+            var removed = JSON.parse(localStorage.getItem('zt_watchlist_removed')) || [];
+            if (removed.indexOf(code) === -1) {
+                removed.push(code);
+                localStorage.setItem('zt_watchlist_removed', JSON.stringify(removed));
+            }
+        } catch(e) {}
+        // 从图谱观察池移除
+        try {
+            var wlList = JSON.parse(localStorage.getItem('zt_watchlist')) || [];
+            var newWl = wlList.filter(function(item) { return item.code !== code; });
+            if (newWl.length !== wlList.length) {
+                localStorage.setItem('zt_watchlist', JSON.stringify(newWl));
+            }
+        } catch(e) {}
+    } else {
+        // === 关注 = 入池: 不写黑名单, 同时加入图谱观察池 ===
         if (list.length >= 30) return;
         list.push({ code: code, name: nameMap[code] || '', time: Date.now() });
+        // 同步加入图谱观察池
+        try {
+            var wlList = JSON.parse(localStorage.getItem('zt_watchlist')) || [];
+            var exists = false;
+            for (var i = 0; i < wlList.length; i++) { if (wlList[i].code === code) { exists = true; break; } }
+            if (!exists && wlList.length < 30) {
+                wlList.push({ code: code, name: nameMap[code] || '' });
+                localStorage.setItem('zt_watchlist', JSON.stringify(wlList));
+            }
+        } catch(e) {}
     }
     saveFollowList(list);
     // 重新构建数据(关注状态变了,<10分的可能新加入)
@@ -333,6 +385,8 @@ function getBaseUrl() {
     }
     return '';
 }
+// CDN: 大数据文件走jsDelivr(国内CDN加速)
+var CDN_BASE = 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
 
 function loadData() {
     var cacheKey = getScoreIDBKey();
@@ -354,9 +408,9 @@ function loadData() {
 
         // 未命中, 正常fetch
         var SCORE_VERSION = 'v2_20260627';
-        var scoreUrl = getBaseUrl() + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
-        var prevUrl = getBaseUrl() + 'stock_basic_scores_v2_prev.json';
-        var poolUrl = getBaseUrl() + 'stock_pool.json';
+        var scoreUrl = CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
+        var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json';
+        var poolUrl = CDN_BASE + 'stock_pool.json';
         var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
 
         var scorePromise = fetch(scoreUrl).then(function(r) {
@@ -424,7 +478,7 @@ function loadData() {
 }
 
 function loadPrevScores(callback) {
-    var prevUrl = getBaseUrl() + 'stock_basic_scores_v2_prev.json';
+    var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json';
     fetch(prevUrl).then(function(r) {
         if (!r.ok) { if (callback) callback(); return; }
         return r.json();
