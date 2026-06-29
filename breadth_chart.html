@@ -1,9 +1,9 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian
+  版本序列号: V20260629.002-dongtaitongbu-cdnqiehuan-guananchiyouxian-kxianshujuchaisu
   上线日期: 2026-06-29
-  基于版本: V20260628.003 (bf1a8a2)
+  基于版本: V20260629.001 (cea92a0)
   功能清单:
     1. 个股5分钟K线(7交易日×48根)
     2. 涨跌家数双Y轴(15分钟粒度,4时段底色)
@@ -25,15 +25,22 @@
     14. 观察池优先(guananchiyouxian): 加载顺序优化
         - chart_data.json(7.5KB秒开) → breadth_open_prices.json(241KB) → 后台全量breadth_stock_data.json(9.5MB)
         - 首屏不依赖9.5MB, 图谱+默认股+金色点秒开, 全量后台非阻塞
+    === V004.002 新增 ===
+    15. K线数据拆分(kxianshujuchaisu): breadth_stock_data.json(9.5MB)拆成stocks/{code}.json(每只2KB)
+        - 4991只股票各一个文件, 总8MB分散存储
+        - 观察池个股按需fetch stocks/{code}.json, 10只=20KB秒开
+        - 输入代码切换单只加载2KB, 不再等9.5MB全量
+        - breadth_stock_data.json保留作兼容备份, 实际不再使用
   数据加载:
     - chart_data.json (7.5KB) → GitHub Pages [V004新增, 图谱核心数据+默认股]
-    - breadth_stock_data.json (9.5MB) → GitHub Pages [后台非阻塞]
+    - stocks/{code}.json (2KB/只) → GitHub Pages [V004.002新增, 按需加载单只K线]
+    - breadth_stock_data.json (9.5MB) → 兼容备份, 实际不再使用
     - breadth_open_prices.json (241KB稀疏) → GitHub Pages
     - stock_basic_scores_v2.json (382KB) → GitHub Pages
     - pinyin_initials.json (79KB) → GitHub Pages
   版本历史:
-    V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys [上一稳定版]
-    V20260628.002-jiazaichengsedian-cdnjiasu-xiufujinsedian [已废弃]
+    V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian [上一版, 9.5MB全量加载]
+    V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys [更早稳定版]
     V20260628.001-jiazaichengsedian-cdnjiasu [已废弃 - 金色点位置bug]
     V20260627.001 (f86b073) [稳定基线]
   上线前备份: bf1a8a2 (V20260628.003)
@@ -378,48 +385,64 @@ fetch('chart_data.json').then(function(r) { return r.json(); }).then(function(d)
 }).catch(function(e) { console.error('chart_data.json load failed', e); });
 
 // === V004: 观察池优先加载策略 ===
-// 加载顺序: chart_data.json(7.5KB秒开) → 开盘价(241KB) → 观察池个股(每只13KB) → 后台全量9.5MB
+// 加载顺序: chart_data.json(7.5KB秒开) → 开盘价(241KB) → 观察池个股(每只2-3KB) → 按需加载其他
 var pendingStockCode = '';
 
-function loadStockData() {
-    var ind = document.getElementById('loadIndicator');
-    if (ind) ind.innerHTML = '<span style="color:#3498db">后台加载全量数据...</span>';
-    fetch(CDN_BASE + 'breadth_stock_data.json').then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-    }).then(function(txt) {
-        if (ind) ind.innerHTML = '<span style="color:#3498db">正在解析...</span>';
-        setTimeout(function() {
-            try {
-                var d = JSON.parse(txt);
-                allStockData = d.stocks || {};
-                if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
-                fullDataLoaded = true;
-                if (ind) { ind.innerHTML = '<span style="color:#27ae60">全量已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 1000); }
-                renderWatchlist();
-                updateWatchlistBtn();
-                if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
-            } catch(e) {
-                console.error('JSON.parse failed:', e);
-                if (ind) ind.innerHTML = '<span style="color:#e74c3c">解析失败,刷新重试</span>';
+// V004: 按需加载单只股票K线 (从stocks/{code}.json, 2-3KB/只)
+function loadSingleStock(code) {
+    if (allStockData[code]) return Promise.resolve(allStockData[code]);
+    return fetch(CDN_BASE + 'stocks/' + code + '.json').then(function(r) {
+        if (!r.ok) return null;
+        return r.json();
+    }).then(function(prices) {
+        if (prices) {
+            allStockData[code] = prices;
+            return prices;
+        }
+        return null;
+    }).catch(function(e) { console.warn('load stock failed', code, e); return null; });
+}
+
+// V004: 观察池个股优先加载 (每只2-3KB, 10只约30KB秒开)
+function loadWatchlistStocks() {
+    var wl = getWatchlist();
+    if (wl.length === 0) return;
+    var promises = wl.map(function(code) {
+        return loadSingleStock(code).then(function(prices) {
+            if (prices) {
+                renderWatchlist();  // 每加载完一只刷新观察池显示
             }
-        }, 50);
-    }).catch(function(e) {
-        console.error('fetch failed:', e);
-        if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
+        });
+    });
+    Promise.all(promises).then(function() {
+        renderWatchlist();
+        // 如果有待加载的股票(用户在数据没来时点的查看), 现在加载
+        if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
     });
 }
 
-// V004: 先加载开盘价(241KB), 再后台加载全量(9.5MB)
+// V004: 后台加载全量(可选, 用于搜索时快速切换)
+// 实际不再需要全量9.5MB, 改成按需加载单只
+function loadStockData() {
+    var ind = document.getElementById('loadIndicator');
+    if (ind) { ind.innerHTML = '<span style="color:#27ae60">就绪</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 1000); }
+    fullDataLoaded = true;  // 标记为已加载(实际按需)
+    renderWatchlist();
+    updateWatchlistBtn();
+}
+
+// V004: 先加载开盘价(241KB), 再优先加载观察池个股
 fetch(CDN_BASE + 'breadth_open_prices.json').then(function(r) { return r.json(); }).then(function(d) {
     allOpenPriceData = d;
     var code = document.getElementById('stockCode').value.trim();
     if (code && allStockData[code]) renderStockChart(code);
     else if (allStockData['600519']) renderStockChart('600519');
     loadStockData();
+    loadWatchlistStocks();  // 观察池个股优先加载
 }).catch(function(e) {
     console.warn('open prices load failed', e);
     loadStockData();
+    loadWatchlistStocks();
 });
 
 // --- 个股查看 ---
@@ -428,13 +451,16 @@ function loadStock() {
     if (!code) return;
     showBasicScoreV2(code);
     if (allStockData[code]) { renderStockChart(code); return; }
-    if (!fullDataLoaded) {
-        pendingStockCode = code;
-        var name = stockNames[code] || code;
-        document.getElementById('stockName').innerHTML = name + '(' + code + ') <span style="color:#e67e22;font-size:11px;">等待数据...</span>';
-        return;
-    }
-    document.getElementById('stockName').innerHTML = '<span style="color:#e74c3c">未找到: ' + code + '</span>';
+    // V004: 按需加载单只股票K线
+    var name = stockNames[code] || code;
+    document.getElementById('stockName').innerHTML = name + '(' + code + ') <span style="color:#3498db;font-size:11px;">加载中...</span>';
+    loadSingleStock(code).then(function(prices) {
+        if (prices) {
+            renderStockChart(code);
+        } else {
+            document.getElementById('stockName').innerHTML = '<span style="color:#e74c3c">未找到: ' + code + '</span>';
+        }
+    });
 }
 
 function renderStockChart(code) {
