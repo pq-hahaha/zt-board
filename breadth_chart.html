@@ -445,6 +445,20 @@ fetch(CDN_BASE + 'breadth_open_prices.json').then(function(r) { return r.json();
     loadWatchlistStocks();
 });
 
+// V004: 加载股票名称(从stock_pool.json, 322KB)
+// V003里名称是从breadth_stock_data.json的names字段获取, V004拆分后改为单独加载stock_pool.json
+fetch(CDN_BASE + 'stock_pool.json').then(function(r) { return r.json(); }).then(function(d) {
+    if (d && d.length) {
+        for (var i = 0; i < d.length; i++) {
+            var code = d[i].code.split('.')[0];
+            stockNames[code] = d[i].name;
+        }
+    }
+    renderWatchlist();
+    var code = document.getElementById('stockCode').value.trim();
+    if (code && allStockData[code]) renderStockChart(code);
+}).catch(function(e) { console.warn('stock_pool load failed', e); });
+
 // --- 个股查看 ---
 function loadStock() {
     var code = document.getElementById('stockCode').value.trim();
