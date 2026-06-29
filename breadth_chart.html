@@ -388,14 +388,16 @@ fetch('chart_data.json').then(function(r) { return r.json(); }).then(function(d)
 // 加载顺序: chart_data.json(7.5KB秒开) → 开盘价(241KB) → 观察池个股(每只2-3KB) → 按需加载其他
 var pendingStockCode = '';
 
-// V004: 按需加载单只股票K线 (从stocks/{code}.json, 2-3KB/只)
+// V004: 按需加载单只股票K线 (从stocks/{code}.json, 含name+prices)
 function loadSingleStock(code) {
     if (allStockData[code]) return Promise.resolve(allStockData[code]);
     return fetch(CDN_BASE + 'stocks/' + code + '.json').then(function(r) {
         if (!r.ok) return null;
         return r.json();
-    }).then(function(prices) {
-        if (prices) {
+    }).then(function(d) {
+        if (d) {
+            var prices = d.prices || d;  // 兼容旧格式(纯数组)和新格式({name,prices})
+            if (d.name) stockNames[code] = d.name;  // 顺便填充名称
             allStockData[code] = prices;
             return prices;
         }
@@ -444,20 +446,6 @@ fetch(CDN_BASE + 'breadth_open_prices.json').then(function(r) { return r.json();
     loadStockData();
     loadWatchlistStocks();
 });
-
-// V004: 加载股票名称(从stock_pool.json, 322KB)
-// V003里名称是从breadth_stock_data.json的names字段获取, V004拆分后改为单独加载stock_pool.json
-fetch(CDN_BASE + 'stock_pool.json').then(function(r) { return r.json(); }).then(function(d) {
-    if (d && d.length) {
-        for (var i = 0; i < d.length; i++) {
-            var code = d[i].code.split('.')[0];
-            stockNames[code] = d[i].name;
-        }
-    }
-    renderWatchlist();
-    var code = document.getElementById('stockCode').value.trim();
-    if (code && allStockData[code]) renderStockChart(code);
-}).catch(function(e) { console.warn('stock_pool load failed', e); });
 
 // --- 个股查看 ---
 function loadStock() {
