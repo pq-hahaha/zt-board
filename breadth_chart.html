@@ -192,6 +192,10 @@ function loadPinyinMap() {
     fetch(getBaseUrl() + 'pinyin_initials.json').then(function(r) { return r.json(); }).then(function(d) {
         pinyinMap = d;
         pinyinLoaded = true;
+        // V004: pinyin_initials.json含name字段, 填充stockNames供搜索和显示
+        for (var code in d) {
+            if (d[code] && d[code].name) stockNames[code] = d[code].name;
+        }
     }).catch(function(e) { console.warn('pinyin map load failed', e); });
 }
 loadPinyinMap();
@@ -204,12 +208,13 @@ function onSearchInput() {
     if (/^\d+$/.test(val) && val.length <= 6) { dd.style.display = 'none'; return; }
 
     searchResults = [];
-    // 搜索源: 拼音映射(最全) 或 索引(名称) 或 完整数据(名称)
+    // V004: pinyinMap格式 {code: {py:"拼音", name:"名称"}}
     for (var code in (pinyinLoaded ? pinyinMap : stockNames)) {
-        var py = (pinyinMap[code] || '').toLowerCase();
-        var name = stockNames[code] || '';
+        var pyObj = pinyinMap[code] || {};
+        var py = (pyObj.py || '').toLowerCase();
+        var name = pyObj.name || stockNames[code] || '';
         if (py.indexOf(val) === 0 || name.indexOf(val) >= 0) {
-            searchResults.push({code: code, name: name, py: pinyinMap[code] || ''});
+            searchResults.push({code: code, name: name, py: pyObj.py || ''});
             if (searchResults.length >= 30) break;
         }
     }
