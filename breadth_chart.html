@@ -1,8 +1,9 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys
-  上线日期: 2026-06-28
+  版本序列号: V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian
+  上线日期: 2026-06-29
+  基于版本: V20260628.003 (bf1a8a2)
   功能清单:
     1. 个股5分钟K线(7交易日×48根)
     2. 涨跌家数双Y轴(15分钟粒度,4时段底色)
@@ -13,19 +14,29 @@
     7. V2评分(stock_basic_scores_v2.json): 按需加载,观察池显示分数(r1,r2,r3)
     8. 拼音首字母搜索(pinyin_initials.json)
     9. 加载金色点(jiazaichengsedian): 9:30开盘价标注, 稀疏格式breadth_open_prices.json
-    10. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN, 解决GitHub Pages国内慢
-    11. 修复金色点(xiufujinsedian): 修复首次加载时金色点不显示(初始化未传openPriceData参数)
-    12. 同步按钮颜色(tongbuyscys): 同步观察池按钮改为绿色(与入观察池一致)
+    10. 修复金色点(xiufujinsedian): 修复首次加载时金色点不显示(初始化未传openPriceData参数)
+    11. 同步按钮颜色(tongbuyscys): 同步观察池按钮改为绿色(与入观察池一致)
+    === V004 新增 ===
+    12. 动态同步(dongtaitongbu): 图谱数据从chart_data.json动态加载, 不再硬编码5组数组
+        - chart_data.json含date锚点(最新交易日)+target_dates(7天)+advData/markArea/xLabels/dateLabels/defaultPriceData
+        - 每日daily_update.py自动重新生成, HTML无需手动patch
+    13. CDN切换(cdnqiehuan): 数据文件从jsDelivr(德国FRA节点)切换到GitHub Pages(东京NRT节点)
+        - jsDelivr国内拉9.5MB仅13KB/s, GitHub Pages东京节点更快
+    14. 观察池优先(guananchiyouxian): 加载顺序优化
+        - chart_data.json(7.5KB秒开) → breadth_open_prices.json(241KB) → 后台全量breadth_stock_data.json(9.5MB)
+        - 首屏不依赖9.5MB, 图谱+默认股+金色点秒开, 全量后台非阻塞
   数据加载:
-    - breadth_stock_data.json (9.5MB) → jsDelivr CDN
-    - breadth_open_prices.json (241KB稀疏) → jsDelivr CDN
-    - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
+    - chart_data.json (7.5KB) → GitHub Pages [V004新增, 图谱核心数据+默认股]
+    - breadth_stock_data.json (9.5MB) → GitHub Pages [后台非阻塞]
+    - breadth_open_prices.json (241KB稀疏) → GitHub Pages
+    - stock_basic_scores_v2.json (382KB) → GitHub Pages
     - pinyin_initials.json (79KB) → GitHub Pages
   版本历史:
+    V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys [上一稳定版]
     V20260628.002-jiazaichengsedian-cdnjiasu-xiufujinsedian [已废弃]
     V20260628.001-jiazaichengsedian-cdnjiasu [已废弃 - 金色点位置bug]
     V20260627.001 (f86b073) [稳定基线]
-  上线前备份: e94753b (V20260628.002)
+  上线前备份: bf1a8a2 (V20260628.003)
 ============================================
 -->
 <!DOCTYPE html>
@@ -121,15 +132,15 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
 <div class="info">红线: 个股5分钟收盘价(左轴) | 蓝线: 全市场上涨家数(右轴) | 金色点: 9:30开盘价 | 橙色点: 9:35收盘价 | 红色点: 15:00收盘价 | 底色: 4时段赚钱效应</div>
 
 <script>
-// === 嵌入图表数据 (update_pages.py替换) ===
-var xLabels = ["06-18","","","","","","","","","","","","","","","","","","","","","","","11:30","","","","","","","","","","","","","","","","","","","","","","","","","06-22","","","","","","","","","","","","","","","","","","","","","","","11:30","","","","","","","","","","","","","","","","","","","","","","","","","06-23","","","","","","","","","","","","","","","","","","","","","","","11:30","","","","","","","","","","","","","","","","","","","","","","","","","06-24","","","","","","","","","","","","","","","","","","","","","","","11:30","","","","","","","","","","","","","","","","","","","","","","","","","06-25","","","","","","","","","","","","","","","","","","","","","","","11:30","","","","","","","","","","","","","","","","","","","","","","","","","06-26","","","","","","","","","","","","","","","","","","","","","","","11:30","","","","","","","","","","","","","","","","","","","","","","","","","06-29","","","","","","","","","","","","","","","","","","","","","","","11:30","","","","","","","","","","","","","","","","","","","","","","","",""];
-var advData = [null,null,1407,1407,1407,1968,1968,1968,2364,2364,2364,2531,2531,2531,2071,2071,2071,1798,1798,1798,1682,1682,1682,1795,1795,1795,1765,1765,1765,1949,1949,1949,1731,1731,1731,1854,1854,1854,1846,1846,1846,1873,1873,1873,1944,1944,1944,1880,null,null,1133,1133,1133,960,960,960,914,914,914,898,898,898,1011,1011,1011,920,920,920,1023,1023,1023,1150,1150,1150,1435,1435,1435,1470,1470,1470,1439,1439,1439,1804,1804,1804,2362,2362,2362,2256,2256,2256,2461,2461,2461,2632,null,null,3190,3190,3190,3312,3312,3312,3366,3366,3366,3388,3388,3388,3401,3401,3401,3199,3199,3199,2996,2996,2996,2970,2970,2970,2950,2950,2950,2820,2820,2820,2976,2976,2976,2591,2591,2591,2519,2519,2519,2046,2046,2046,2268,2268,2268,2409,null,null,1045,1045,1045,1225,1225,1225,937,937,937,979,979,979,854,854,854,786,786,786,800,800,800,989,989,989,1153,1153,1153,1329,1329,1329,1321,1321,1321,1282,1282,1282,1353,1353,1353,1323,1323,1323,1291,1291,1291,1343,null,null,1692,1692,1692,995,995,995,897,897,897,923,923,923,1009,1009,1009,1159,1159,1159,1095,1095,1095,1088,1088,1088,1244,1244,1244,1088,1088,1088,1117,1117,1117,971,971,971,1079,1079,1079,1100,1100,1100,1118,1118,1118,1174,null,null,1039,1039,1039,755,755,755,878,878,878,996,996,996,807,807,807,627,627,627,656,656,656,710,710,710,852,852,852,817,817,817,873,873,873,904,904,904,721,721,721,758,758,758,806,806,806,666,null,null,1281,1281,1281,1002,1002,1002,1112,1112,1112,2189,2189,2189,1670,1670,1670,1889,1889,1889,1895,1895,1895,1796,1796,1796,1670,1670,1670,2122,2122,2122,2413,2413,2413,2286,2286,2286,2122,2122,2122,2201,2201,2201,2230,2230,2230,2313];
-var markAreaPairs = [[{"xAxis":0},{"xAxis":11,"itemStyle":{"color":"rgba(251,226,213,0.18)"}}],[{"xAxis":12},{"xAxis":23,"itemStyle":{"color":"rgba(39,83,23,0.30)"}}],[{"xAxis":24},{"xAxis":35,"itemStyle":{"color":"rgba(39,83,23,0.30)"}}],[{"xAxis":36},{"xAxis":47,"itemStyle":{"color":"rgba(39,83,23,0.30)"}}],[{"xAxis":48},{"xAxis":59,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":60},{"xAxis":71,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":72},{"xAxis":83,"itemStyle":{"color":"rgba(39,83,23,0.30)"}}],[{"xAxis":84},{"xAxis":95,"itemStyle":{"color":"rgba(253,187,167,0.20)"}}],[{"xAxis":96},{"xAxis":107,"itemStyle":{"color":"rgba(255,124,128,0.25)"}}],[{"xAxis":108},{"xAxis":119,"itemStyle":{"color":"rgba(253,187,167,0.20)"}}],[{"xAxis":120},{"xAxis":131,"itemStyle":{"color":"rgba(253,187,167,0.20)"}}],[{"xAxis":132},{"xAxis":143,"itemStyle":{"color":"rgba(181,230,162,0.20)"}}],[{"xAxis":144},{"xAxis":155,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":156},{"xAxis":167,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":168},{"xAxis":179,"itemStyle":{"color":"rgba(39,83,23,0.30)"}}],[{"xAxis":180},{"xAxis":191,"itemStyle":{"color":"rgba(39,83,23,0.30)"}}],[{"xAxis":192},{"xAxis":203,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":204},{"xAxis":215,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":216},{"xAxis":227,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":228},{"xAxis":239,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":240},{"xAxis":251,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":252},{"xAxis":263,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":264},{"xAxis":275,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":276},{"xAxis":287,"itemStyle":{"color":"rgba(13,53,18,0.35)"}}],[{"xAxis":288},{"xAxis":299,"itemStyle":{"color":"rgba(181,230,162,0.20)"}}],[{"xAxis":300},{"xAxis":311,"itemStyle":{"color":"rgba(39,83,23,0.30)"}}],[{"xAxis":312},{"xAxis":323,"itemStyle":{"color":"rgba(181,230,162,0.20)"}}],[{"xAxis":324},{"xAxis":335,"itemStyle":{"color":"rgba(181,230,162,0.20)"}}]];
+// === V004: 图表数据从chart_data.json动态加载 ===
+var xLabels = [];
+var advData = [];
+var markAreaPairs = [];
+var dateLabels = [];
+var currentPriceData = [];
 var dayBoundaries = [0, 48, 96, 144, 192, 240, 288];
 var dayLineIndices = [48, 96, 144, 192, 240, 288];
 var hourLineIndices = [12, 24, 36, 60, 72, 84, 108, 120, 132, 156, 168, 180, 204, 216, 228, 252, 264, 276, 300, 312, 324];
-var dateLabels = ["06-18","06-22","06-23","06-24","06-25","06-26","06-29"];
-var currentPriceData = [1231.0,1227.34,1223.89,1222.02,1221.19,1225.0,1231.88,1229.34,1225.15,1225.5,1229.43,1227.0,1223.07,1222.02,1222.84,1222.04,1221.9,1222.0,1221.02,1220.73,1221.15,1220.14,1220.4,1221.4,1215.33,1215.85,1215.45,1215.79,1213.89,1214.3,1216.44,1213.8,1213.15,1213.11,1213.69,1214.07,1212.16,1212.53,1212.0,1214.75,1214.93,1215.9,1214.51,1215.82,1216.99,1217.38,1222.55,1215.0,1217.1,1218.74,1220.0,1222.52,1222.68,1225.6,1219.11,1222.31,1221.49,1222.55,1222.49,1222.28,1222.93,1222.3,1225.01,1226.06,1229.89,1232.54,1227.88,1228.5,1229.7,1226.0,1225.12,1227.01,1224.85,1223.58,1231.6,1235.69,1242.8,1250.0,1241.66,1242.86,1241.3,1237.06,1240.23,1240.0,1245.89,1248.91,1248.0,1245.04,1243.9,1243.74,1243.17,1241.15,1242.0,1241.32,1241.89,1241.41,1258.24,1249.9,1258.9,1260.99,1255.0,1255.38,1248.53,1246.97,1240.05,1237.8,1233.0,1230.06,1228.96,1231.65,1227.77,1228.21,1230.0,1228.02,1227.5,1227.03,1228.61,1229.84,1231.76,1228.61,1227.01,1229.09,1228.96,1227.01,1226.4,1226.41,1226.0,1224.02,1223.12,1221.8,1222.0,1220.57,1219.51,1219.42,1220.76,1219.66,1220.4,1219.54,1218.77,1218.99,1220.93,1221.65,1222.06,1222.45,1226.69,1236.99,1237.82,1234.8,1226.09,1222.3,1218.74,1218.5,1216.61,1212.92,1209.65,1211.98,1211.11,1210.91,1211.08,1213.34,1213.92,1217.2,1217.0,1217.08,1216.0,1215.37,1214.76,1216.06,1213.7,1211.81,1211.66,1210.47,1210.1,1209.62,1208.22,1209.23,1209.25,1208.65,1208.98,1208.89,1208.79,1207.7,1207.78,1207.6,1207.73,1208.87,1208.08,1207.81,1207.91,1207.96,1207.98,1207.68,1204.9,1201.33,1207.0,1201.03,1200.09,1200.56,1205.2,1206.93,1203.93,1203.46,1203.02,1204.66,1203.92,1214.96,1216.0,1220.12,1220.51,1222.57,1217.39,1218.4,1216.0,1214.56,1212.0,1212.72,1211.0,1214.3,1212.8,1209.29,1209.07,1206.95,1207.69,1206.01,1206.57,1206.72,1207.27,1206.85,1207.14,1206.5,1206.51,1206.79,1206.63,1206.63,1210.3,1209.41,1208.22,1211.54,1213.0,1212.1,1188.32,1185.56,1183.4,1190.4,1192.19,1187.36,1188.19,1189.02,1188.6,1184.99,1181.88,1181.25,1180.62,1177.68,1176.0,1177.0,1177.0,1175.6,1176.8,1185.11,1187.19,1181.2,1183.23,1184.98,1183.66,1180.99,1183.82,1182.26,1181.33,1183.0,1181.69,1180.12,1179.78,1178.99,1178.39,1178.86,1178.12,1176.17,1175.6,1176.47,1176.12,1175.68,1176.99,1174.86,1174.29,1171.82,1170.05,1168.63,1153.01,1154.18,1153.05,1157.7,1161.84,1166.5,1173.16,1180.1,1178.0,1197.02,1201.0,1201.31,1208.01,1210.17,1210.91,1209.9,1206.38,1208.45,1208.56,1209.06,1204.34,1204.26,1204.69,1206.29,1204.12,1203.12,1203.66,1204.69,1200.3,1196.6,1194.04,1191.18,1194.37,1193.59,1193.95,1192.55,1193.49,1192.49,1191.1,1190.07,1188.83,1190.52,1192.22,1190.47,1192.0,1191.94,1195.0,1194.96];
 
 // === 全局状态 ===
 var allStockData = {};          // 个股价格数据(从完整JSON加载)
@@ -153,8 +164,7 @@ function expandOpenPrices(sparseArr) {
     return full;
 }
 
-// 默认股票(茅台)数据已在HTML嵌入,直接存入allStockData
-allStockData['600519'] = currentPriceData;
+// 默认股票(茅台)数据从chart_data.json加载,见下方fetch
 
 // === 拼音首字母搜索 ===
 var pinyinMap = {};
@@ -167,8 +177,8 @@ function getBaseUrl() {
         ? 'https://pq-hahaha.github.io/zt-board/'
         : '';
 }
-// CDN: 大数据文件走jsDelivr(国内CDN加速), 小文件走GitHub Pages
-var CDN_BASE = 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
+// V004: 数据文件走GitHub Pages(东京NRT节点, 比jsDelivr法兰克福近), 不走jsDelivr
+var CDN_BASE = getBaseUrl();
 
 function loadPinyinMap() {
     if (pinyinLoaded) return;
@@ -348,17 +358,32 @@ function buildOption(priceData, openPriceData) {
     };
 }
 
-chart.setOption(buildOption(currentPriceData, currentOpenPriceData));
+// V004: 初始渲染延迟到chart_data.json加载后
+// chart.setOption(buildOption(currentPriceData, currentOpenPriceData));
 window.addEventListener('resize', function() { chart.resize(); });
 
-// === 数据加载: fetch + 浏览器HTTP缓存(无IndexedDB) ===
-// 首次: fetch 2.4MB gzip → setTimeout(50) → JSON.parse 9MB → 2-3秒
-// 二次: 浏览器HTTP缓存命中 → 秒级
+// === V004: 优先加载chart_data.json (7.5KB, 秒开) ===
+fetch('chart_data.json').then(function(r) { return r.json(); }).then(function(d) {
+    xLabels = d.xLabels;
+    advData = d.advData;
+    markAreaPairs = d.markAreaPairs;
+    dateLabels = d.dateLabels;
+    currentPriceData = d.defaultPriceData;
+    allStockData['600519'] = currentPriceData;
+    var dateInfo = document.querySelector('.header p');
+    if (dateInfo) dateInfo.innerHTML = '最新交易日: <b style="color:#e74c3c">' + d.date + '</b> | 数据区间: ' + d.target_dates[0] + ' ~ ' + d.target_dates[d.target_dates.length-1];
+    chart.setOption(buildOption(currentPriceData, currentOpenPriceData));
+    showBasicScoreV2('600519');
+    renderWatchlist();
+}).catch(function(e) { console.error('chart_data.json load failed', e); });
+
+// === V004: 观察池优先加载策略 ===
+// 加载顺序: chart_data.json(7.5KB秒开) → 开盘价(241KB) → 观察池个股(每只13KB) → 后台全量9.5MB
 var pendingStockCode = '';
 
 function loadStockData() {
     var ind = document.getElementById('loadIndicator');
-    if (ind) ind.innerHTML = '<span style="color:#3498db">正在下载...</span>';
+    if (ind) ind.innerHTML = '<span style="color:#3498db">后台加载全量数据...</span>';
     fetch(CDN_BASE + 'breadth_stock_data.json').then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
@@ -370,7 +395,7 @@ function loadStockData() {
                 allStockData = d.stocks || {};
                 if (d.names) { for (var code in d.names) { if (!stockNames[code]) stockNames[code] = d.names[code]; } }
                 fullDataLoaded = true;
-                if (ind) { ind.innerHTML = '<span style="color:#27ae60">已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 500); }
+                if (ind) { ind.innerHTML = '<span style="color:#27ae60">全量已加载</span>'; setTimeout(function() { if (ind) ind.style.display = 'none'; }, 1000); }
                 renderWatchlist();
                 updateWatchlistBtn();
                 if (pendingStockCode) { renderStockChart(pendingStockCode); pendingStockCode = ''; }
@@ -384,16 +409,18 @@ function loadStockData() {
         if (ind) ind.innerHTML = '<span style="color:#e74c3c">下载失败,刷新重试</span>';
     });
 }
-loadStockData();
 
-// 加载开盘价数据(稀疏格式, 仅241KB, 非阻塞, 不影响主图)
+// V004: 先加载开盘价(241KB), 再后台加载全量(9.5MB)
 fetch(CDN_BASE + 'breadth_open_prices.json').then(function(r) { return r.json(); }).then(function(d) {
     allOpenPriceData = d;
-    // 刷新当前股票以显示金色点
     var code = document.getElementById('stockCode').value.trim();
     if (code && allStockData[code]) renderStockChart(code);
     else if (allStockData['600519']) renderStockChart('600519');
-}).catch(function(e) { console.warn('open prices load failed', e); });
+    loadStockData();
+}).catch(function(e) {
+    console.warn('open prices load failed', e);
+    loadStockData();
+});
 
 // --- 个股查看 ---
 function loadStock() {
