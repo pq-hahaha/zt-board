@@ -188,7 +188,7 @@ function loadBasicScoresV2() {
         return Promise.resolve();
     }
     // 未加载, 直接fetch评分数据(不重新渲染表格)
-    var SCORE_VERSION = 'v2_20260627';
+    var SCORE_VERSION = 'v2_20260629';
     return fetch(CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION)
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -385,8 +385,8 @@ function getBaseUrl() {
     }
     return '';
 }
-// CDN: 大数据文件走jsDelivr(国内CDN加速)
-var CDN_BASE = 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
+// V004: 数据文件走GitHub Pages(东京NRT节点, 比jsDelivr法兰克福近), 不走jsDelivr
+var CDN_BASE = getBaseUrl();
 
 function loadData() {
     var cacheKey = getScoreIDBKey();
@@ -407,7 +407,7 @@ function loadData() {
         }
 
         // 未命中, 正常fetch
-        var SCORE_VERSION = 'v2_20260627';
+        var SCORE_VERSION = 'v2_20260629';
         var scoreUrl = CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
         var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json';
         var poolUrl = CDN_BASE + 'stock_pool.json';
