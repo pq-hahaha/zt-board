@@ -1,24 +1,30 @@
 <!--
 ============================================
   个股评分排行 - 正式运营版
-  版本序列号: V20260628.002-cdnjiasu-guanzhutongbu
-  上线日期: 2026-06-28
+  版本序列号: V20260630.001-tradingdaysjiarudelta
+  上线日期: 2026-06-30
   功能清单:
     1. V2评分排行(总分/维度r1,r2,r3)
-    2. 分数变化(↑↓箭头+delta, 对比v2_prev)
+    2. 分数变化(↑↓箭头+delta, Plan B: trading_days.json + stock_basic_scores_history.json)
+       - 总分 = trading_days.json 最新交易日对应 history 中的分数
+       - delta = 今日分数 - 昨日分数 (两个均从 history 按日期取)
+       - 正→红色↑, 负→绿色↓, 零→灰色--
     3. 关注池(score_rank_follow, 与图谱页观察池双向同步)
     4. 拼音首字母搜索(pinyin_initials.json)
     5. 股票池名称回退(stock_pool.json)
-    6. CDN加速(cdnjiasu): 大数据文件走jsDelivr CDN
-    7. 关注同步(guanzhutongbu): toggleFollow与图谱页联动
+    6. CDN加速: 数据文件走GitHub Pages
+    7. 关注同步: toggleFollow与图谱页联动
        - 关注: 同时加入图谱观察池(zt_watchlist)
        - 取消: 写黑名单(zt_watchlist_removed) + 从图谱观察池移除
   数据加载:
-    - stock_basic_scores_v2.json (382KB) → jsDelivr CDN
-    - stock_basic_scores_v2_prev.json (382KB) → jsDelivr CDN
-    - stock_pool.json (300KB) → jsDelivr CDN
-    - pinyin_initials.json (79KB) → GitHub Pages
+    - trading_days.json → 最后2个交易日 (主: 日期校对)
+    - stock_basic_scores_history.json (~1.1MB) → 多日分数历史 (主: 分数+delta源)
+    - stock_basic_scores_v2.json (375KB) → fallback
+    - stock_basic_scores_v2_prev.json (375KB) → fallback
+    - stock_pool.json (315KB) → 名称
+    - pinyin_initials.json (79KB) → 搜索
   版本历史:
+    V20260628.002-cdnjiasu-guanzhutongbu [上一版]
     V20260628.001-cdnjiasu [基线]
   上线前备份: b98a675 (V20260628.001)
 ============================================
@@ -145,50 +151,14 @@ var prevScoresLoaded = false;
 var currentSort = 'score'; // 'score', 'rank', 'follow', 'delta'
 var sortDirection = 'desc';
 
-// === IDB缓存辅助函数(复用cjws_cache数据库) ===
-function getScoreIDBKey() {
-    var t = new Date();
-    return t.getFullYear() + '-' + ('0'+(t.getMonth()+1)).slice(-2) + '-' + ('0'+t.getDate()).slice(-2) + '_chongjiuwanshi_scores';
-}
-function scoreIdbGet(key) {
-    return new Promise(function(resolve) {
-        try {
-            var req = indexedDB.open('cjws_cache', 1);
-            req.onupgradeneeded = function(e) { try { e.target.result.createObjectStore('stock_data'); } catch(ex) {} };
-            req.onsuccess = function(e) {
-                var db = e.target.result;
-                try {
-                    var tx = db.transaction('stock_data', 'readonly');
-                    var getReq = tx.objectStore('stock_data').get(key);
-                    getReq.onsuccess = function() { resolve(getReq.result || null); };
-                    getReq.onerror = function() { resolve(null); };
-                } catch(ex) { resolve(null); }
-            };
-            req.onerror = function() { resolve(null); };
-        } catch(e) { resolve(null); }
-    });
-}
-function scoreIdbPut(key, val) {
-    try {
-        var req = indexedDB.open('cjws_cache', 1);
-        req.onupgradeneeded = function(e) { try { e.target.result.createObjectStore('stock_data'); } catch(ex) {} };
-        req.onsuccess = function(e) {
-            var db = e.target.result;
-            try {
-                var tx = db.transaction('stock_data', 'readwrite');
-                tx.objectStore('stock_data').put(val, key);
-            } catch(ex) {}
-        };
-    } catch(e) {}
-}
-
 // 加载评分数据(同步功能需要, 如果已加载直接返回)
 function loadBasicScoresV2() {
     if (basicScoresV2Loaded && Object.keys(basicScoresV2).length > 0) {
         return Promise.resolve();
     }
     // 未加载, 直接fetch评分数据(不重新渲染表格)
-    var SCORE_VERSION = 'v2_20260629';
+    var dt = new Date();
+    var SCORE_VERSION = 'v2_' + dt.getFullYear() + ('0'+(dt.getMonth()+1)).slice(-2) + ('0'+dt.getDate()).slice(-2);
     return fetch(CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION)
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -389,91 +359,128 @@ function getBaseUrl() {
 var CDN_BASE = getBaseUrl();
 
 function loadData() {
-    var cacheKey = getScoreIDBKey();
+    // === Plan B: trading_days.json + stock_basic_scores_history.json ===
+    var tdUrl = CDN_BASE + 'trading_days.json';
+    var histUrl = CDN_BASE + 'stock_basic_scores_history.json';
+    var poolUrl = CDN_BASE + 'stock_pool.json';
+    var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
 
-    // 先试IDB缓存(当天有效)
-    scoreIdbGet(cacheKey).then(function(cached) {
-        if (cached && cached.scores && Object.keys(cached.scores).length > 0) {
-            // 命中缓存, 直接使用(跳过fetch+parse)
-            basicScoresV2 = cached.scores;
-            nameMap = cached.nameMap || {};
-            pinyinMap = cached.pinyinMap || {};
-            basicScoresV2Loaded = true;
-            // 也加载prev数据(缓存不存prev)
-            loadPrevScores(function() {
-                rebuildDisplayDataFromScores(basicScoresV2, {date: cached.date});
-            });
-            return;
+    // Step 1: 加载 trading_days.json
+    var tdPromise = fetch(tdUrl).then(function(r) {
+        if (!r.ok) throw new Error('trading_days HTTP ' + r.status);
+        return r.json();
+    }).catch(function(e) {
+        console.warn('trading_days.json failed, using fallback:', e.message);
+        return null;
+    });
+
+    // Step 2: 加载基础数据(并行)
+    var poolPromise = fetch(poolUrl).then(function(r) {
+        if (!r.ok) return null;
+        return r.json();
+    }).catch(function() { return null; });
+    var pinyinPromise = fetch(pinyinUrl).then(function(r) {
+        if (!r.ok) return {};
+        return r.json();
+    }).catch(function() { return {}; });
+
+    // Step 3: 先拿到 trading_days, 再决定用 history 还是 fallback
+    Promise.all([tdPromise, poolPromise, pinyinPromise]).then(function(r1) {
+        var td = r1[0];
+        var poolData = r1[1];
+        var pinyinData = r1[2] || {};
+
+        // 填充 nameMap
+        if (poolData) {
+            for (var i = 0; i < poolData.length; i++) {
+                var code = poolData[i].code.split('.')[0];
+                nameMap[code] = poolData[i].name;
+            }
+        }
+        pinyinMap = pinyinData;
+
+        // 从 trading_days.json 取最后2个交易日
+        var latestDay = null, prevDay = null;
+        if (td && td.days && td.days.length >= 2) {
+            latestDay = td.days[td.days.length - 1];
+            prevDay = td.days[td.days.length - 2];
         }
 
-        // 未命中, 正常fetch
-        var SCORE_VERSION = 'v2_20260629';
-        var scoreUrl = CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
-        var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json';
-        var poolUrl = CDN_BASE + 'stock_pool.json';
-        var pinyinUrl = getBaseUrl() + 'pinyin_initials.json';
-
-        var scorePromise = fetch(scoreUrl).then(function(r) {
-            if (!r.ok) throw new Error('scores HTTP ' + r.status);
-            return r.json();
-        });
-        var prevPromise = fetch(prevUrl).then(function(r) {
+        // Step 4: 加载 history.json → 取这两个交易日的分数
+        fetch(histUrl).then(function(r) {
             if (!r.ok) return null;
             return r.json();
-        }).catch(function() { return null; });
-        var poolPromise = fetch(poolUrl).then(function(r) {
-            if (!r.ok) return null;
-            return r.json();
-        }).catch(function() { return null; });
-        var pinyinPromise = fetch(pinyinUrl).then(function(r) {
-            if (!r.ok) return {};
-            return r.json();
-        }).catch(function() { return {}; });
+        }).catch(function() { return null; }).then(function(histData) {
+            var todayScores = null, yesterdayScores = null;
+            var todayDate = latestDay || '';
 
-        Promise.all([scorePromise, prevPromise, poolPromise, pinyinPromise]).then(function(results) {
-            var scoreData = results[0];
-            var prevData = results[1];
-            var poolData = results[2];
-            var pinyinData = results[3] || {};
-
-            if (poolData) {
-                for (var i = 0; i < poolData.length; i++) {
-                    var code = poolData[i].code.split('.')[0];
-                    nameMap[code] = poolData[i].name;
-                }
-            }
-            pinyinMap = pinyinData;
-
-            var scores = scoreData.scores;
-            basicScoresV2 = scores;
-            basicScoresV2Loaded = true;
-
-            // 存prev数据
-            if (prevData && prevData.scores) {
-                prevScores = prevData.scores;
-                prevScoresLoaded = true;
-            }
-
-            for (var code in scores) {
-                if (!nameMap[code]) {
-                    nameMap[code] = code;
+            if (histData && histData.history && latestDay) {
+                for (var hi = 0; hi < histData.history.length; hi++) {
+                    var h = histData.history[hi];
+                    if (h.date === latestDay) todayScores = h.scores;
+                    if (h.date === prevDay) yesterdayScores = h.scores;
                 }
             }
 
-            // 写IDB缓存(当天有效, 次日自动失效)
-            scoreIdbPut(cacheKey, {
-                date: scoreData.date,
-                scores: scores,
-                nameMap: nameMap,
-                pinyinMap: pinyinMap
+            // 如果 history 有今天的数据 → 直接用, delta 用昨天的
+            if (todayScores && Object.keys(todayScores).length > 0) {
+                basicScoresV2 = todayScores;
+                basicScoresV2Loaded = true;
+
+                // delta source = yesterday's history scores
+                if (yesterdayScores) {
+                    prevScores = yesterdayScores;
+                    prevScoresLoaded = true;
+                }
+                // 如果history没有昨天的数据, 尝试从prev文件补
+                else {
+                    loadPrevScores(null);
+                }
+
+                // 补nameMap
+                for (var code in todayScores) {
+                    if (!nameMap[code]) nameMap[code] = code;
+                }
+
+                rebuildDisplayDataFromScores(todayScores, {date: todayDate});
+                return;
+            }
+
+            // === Fallback: history 不完整, 用 v2.json + v2_prev.json ===
+            console.warn('History incomplete, fallback to v2+prev');
+            var SCORE_VERSION = 'v2_' + (latestDay || '20260630').replace(/-/g, '');
+            var scoreUrl = CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
+            var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json';
+
+            Promise.all([
+                fetch(scoreUrl).then(function(r) { return r.json(); }),
+                fetch(prevUrl).then(function(r) { return r.json(); }).catch(function() { return null; })
+            ]).then(function(r2) {
+                var scoreData = r2[0];
+                var prevData = r2[1];
+
+                var scores = scoreData.scores;
+                basicScoresV2 = scores;
+                basicScoresV2Loaded = true;
+
+                if (prevData && prevData.scores) {
+                    prevScores = prevData.scores;
+                    prevScoresLoaded = true;
+                }
+
+                for (var code in scores) {
+                    if (!nameMap[code]) nameMap[code] = code;
+                }
+
+                rebuildDisplayDataFromScores(scores, scoreData);
+            }).catch(function(e) {
+                document.getElementById('rankBody').innerHTML =
+                    '<tr><td colspan="10" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
             });
-
-            rebuildDisplayDataFromScores(scores, scoreData);
-
-        }).catch(function(e) {
-            document.getElementById('rankBody').innerHTML =
-                '<tr><td colspan="10" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
         });
+    }).catch(function(e) {
+        document.getElementById('rankBody').innerHTML =
+            '<tr><td colspan="10" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
     });
 }
 
