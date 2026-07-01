@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>三维情绪强弱评分</title>
 <!--
-  版本序列号: V20260701.001-emotionranking
+  版本序列号: V20260701.002-emotionranking
   上线日期: 2026-07-01
   功能清单:
     1. 三维情绪强弱评分排行(总分/Alpha/Bonus/涨停根/跌停根)
@@ -24,43 +24,44 @@
     - pinyin_initials.json → GitHub Pages
   版本历史:
     V20260701.001-emotionranking [基线]
+    V20260701.002-emotionranking [修复: 拼音搜索bug + 退市股隐藏 + 字体加大]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; }
+body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; font-size: 15px; }
 .header { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: white; padding: 16px 24px; }
-.header h1 { font-size: 22px; margin-bottom: 4px; }
-.header p { font-size: 13px; opacity: 0.85; }
+.header h1 { font-size: 24px; margin-bottom: 4px; }
+.header p { font-size: 14px; opacity: 0.85; }
 .ranking-wrap { max-width: 1400px; margin: 16px auto; padding: 0 16px; }
 .link-back { margin-bottom: 12px; }
-.link-back a { color: #3498db; text-decoration: none; font-size: 14px; }
+.link-back a { color: #3498db; text-decoration: none; font-size: 15px; }
 .link-back a:hover { text-decoration: underline; }
 .filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-.filter-bar input { padding: 6px 12px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; width: 240px; }
-.filter-bar #countInfo { color: #888; font-size: 13px; margin-left: auto; }
+.filter-bar input { padding: 7px 12px; font-size: 15px; border: 1px solid #ddd; border-radius: 4px; width: 240px; }
+.filter-bar #countInfo { color: #888; font-size: 14px; margin-left: auto; }
 .stats-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.stats-chip { padding: 4px 10px; background: #ecf0f1; border-radius: 12px; font-size: 12px; color: #555; }
+.stats-chip { padding: 5px 12px; background: #ecf0f1; border-radius: 12px; font-size: 13px; color: #555; }
 .stats-chip b { color: #2c3e50; }
 .ranking-table { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
 .table-scroll { max-height: calc(100vh - 220px); overflow-y: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
 thead { position: sticky; top: 0; z-index: 10; }
-th { background: #2c3e50; color: white; padding: 10px 6px; text-align: center; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+th { background: #2c3e50; color: white; padding: 10px 8px; text-align: center; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; font-size: 14px; }
 th:hover { background: #34495e; }
 th.sort-active { background: #e74c3c; }
 th.sort-asc::after { content: ' ↑'; }
 th.sort-desc::after { content: ' ↓'; }
-td { padding: 7px 6px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+td { padding: 8px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; }
 tr:hover { background: #f8f9fa; }
-.td-rank { width: 50px; color: #888; font-size: 12px; }
+.td-rank { width: 50px; color: #888; font-size: 13px; }
 .td-code { color: #3498db; font-weight: 600; }
 .td-name { text-align: left; padding-left: 12px; }
-.score-total { font-weight: 700; font-size: 15px; }
+.score-total { font-weight: 700; font-size: 17px; }
 .score-positive { color: #e74c3c; }
 .score-negative { color: #27ae60; }
 .score-zero { color: #888; }
 .score-delta { font-weight: 600; }
-.sub-score { color: #666; font-size: 12px; }
+.sub-score { color: #666; font-size: 13px; }
 .v2-score { font-weight: 600; }
 .v2-tier-1 { color: #e74c3c; } /* 20+ */
 .v2-tier-2 { color: #e67e22; } /* 15-20 */
@@ -220,9 +221,17 @@ function loadData() {
 
 function buildDisplayData() {
     allData = [];
+    var skippedDelisted = 0;
     for (var code in emotionScores) {
         var s = emotionScores[code];
         if (!s || typeof s.s !== 'number') continue;
+
+        var name = nameMap[code] || code;
+        // 隐藏退市股(名称含"退")
+        if (name.indexOf('退') >= 0) {
+            skippedDelisted++;
+            continue;
+        }
 
         var prev = prevEmotionScores[code];
         var prevS = (prev && typeof prev.s === 'number') ? prev.s : null;
@@ -230,8 +239,8 @@ function buildDisplayData() {
 
         allData.push({
             code: code,
-            name: nameMap[code] || code,
-            pinyin: pinyinMap[code] || '',
+            name: name,
+            pinyin: (pinyinMap[code] && pinyinMap[code].py) || '',
             score: s.s,
             alpha: s.alpha || 0,
             bonus: s.bonus || 0,
