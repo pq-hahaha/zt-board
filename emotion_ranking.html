@@ -28,6 +28,7 @@
     V20260701.006-emotionranking [搜索防抖: 输入停顿250ms后才触发过滤, 避免逐字重绘]
     V20260701.008-emotionranking [修复: 跨日边界Rp虚高 + histUrl改PAGES_BASE]
     V20260701.009-emotionranking [修复: 变化栏fallback加载prev文件 + Q_MID=25000 + 调试日志]
+    V20260701.010-emotionranking [delta直读emotion_scores_prev.json, 同算法日环比]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -146,73 +147,45 @@ var CDN_BASE = getCdnBase();
 function loadData() {
     var tdUrl = CDN_BASE + 'trading_days.json';
     var emotionUrl = PAGES_BASE + 'emotion_scores.json';
-    var histUrl = PAGES_BASE + 'emotion_scores_history.json';
     var prevUrl = PAGES_BASE + 'emotion_scores_prev.json';
 
     var tdPromise = fetch(tdUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
     var emotionPromise = fetch(emotionUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
-    var histPromise = fetch(histUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
     var prevPromise = fetch(prevUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
 
-    Promise.all([tdPromise, emotionPromise, histPromise, prevPromise])
+    Promise.all([tdPromise, emotionPromise, prevPromise])
     .then(function(results) {
         var td = results[0];
         var emotionData = results[1];
-        var histData = results[2];
-        var prevData = results[3];
+        var prevData = results[2];
 
-        console.log('[emotion] td days:', td && td.days ? td.days.length : 'null');
-        console.log('[emotion] emotionDate:', emotionData ? emotionData.date : 'null');
-        console.log('[emotion] histData:', histData ? (histData.history ? histData.history.length + ' entries' : 'no history') : 'null');
-        console.log('[emotion] prevData:', prevData ? (prevData.date + ', ' + Object.keys(prevData.scores || {}).length + ' scores') : 'null');
-
-        // 三维分数(n/py/v2已嵌入scores对象中, 无需额外加载)
         if (!emotionData || !emotionData.scores) {
             document.getElementById('rankBody').innerHTML =
                 '<tr><td colspan="10" class="loading" style="color:#e74c3c">三维评分数据加载失败</td></tr>';
             return;
         }
         emotionScores = emotionData.scores;
-        todayDate = emotionData.date || (td && td.days ? td.days[td.days.length-1] : '');
+        todayDate = emotionData.date || '';
 
-        // 取昨日分数(用于delta) —— 优先history(跨日), fallback prev文件(同日上一版)
-        var latestDay = todayDate;
+        // 直接读emotion_scores_prev.json作为前一交易日分数 (同算法, 双窗口生成)
+        if (prevData && prevData.scores) {
+            prevEmotionScores = prevData.scores;
+            console.log('[emotion] prev loaded:', prevData.date, Object.keys(prevEmotionScores).length, 'stocks');
+        } else {
+            console.warn('[emotion] prev data not available, delta disabled');
+        }
+
+        // 取上一交易日(用于显示)
         var prevDay = null;
-        var deltaSource = 'none';
         if (td && td.days && td.days.length >= 2) {
-            latestDay = td.days[td.days.length - 1];
             prevDay = td.days[td.days.length - 2];
         }
 
-        // 方法1: history中找前一交易日
-        if (histData && histData.history && prevDay) {
-            for (var hi = 0; hi < histData.history.length; hi++) {
-                var h = histData.history[hi];
-                if (h.date === prevDay) {
-                    prevEmotionScores = h.scores || {};
-                    deltaSource = 'history(' + prevDay + ')';
-                    break;
-                }
-            }
-        }
-
-        // 方法2: fallback → 加载prev文件(同日上一版参数跑的分, 至少能看到箭头)
-        if (deltaSource === 'none' && prevData && prevData.scores && prevData.date) {
-            prevEmotionScores = prevData.scores;
-            deltaSource = 'prevfile(' + prevData.date + ')';
-            // prevDay无意义时用prev文件日期
-            if (!prevDay) prevDay = prevData.date;
-        }
-
-        console.log('[emotion] deltaSource:', deltaSource, ', prevScores:', Object.keys(prevEmotionScores).length);
-
-        // 构建显示数据
         buildDisplayData();
         renderTable();
 
-        // 日期信息
         var dateInfo = '三维评分日期: ' + todayDate;
-        if (deltaSource !== 'none') dateInfo += ' | 对比源: ' + deltaSource;
+        if (prevDay) dateInfo += ' | 对比: ' + prevDay;
         dateInfo += ' | 股票数: ' + allData.length;
         document.getElementById('dateInfo').textContent = dateInfo;
     }).catch(function(e) {
