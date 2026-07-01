@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>三维情绪强弱评分</title>
 <!--
-  版本序列号: V20260701.004-emotionranking
+  版本序列号: V20260701.005-emotionranking
   上线日期: 2026-07-01
   功能清单:
     1. 三维情绪强弱评分排行(总分/Alpha/Bonus/涨停根/跌停根)
@@ -16,7 +16,7 @@
     6. CDN加速: 大数据文件走jsDelivr CDN
     7. 三种排序: 三维分/V2分/Alpha (点击表头切换)
   数据加载(仅3个请求, 已合并冗余源):
-    - emotion_scores.json → jsDelivr CDN (含名称n/拼音py/V2分v2)
+    - emotion_scores.json → GitHub Pages直连 (含名称n/拼音py/V2分v2, 避免CDN缓存不一致)
     - emotion_scores_history.json → jsDelivr CDN
     - trading_days.json → jsDelivr CDN
   版本历史:
@@ -24,6 +24,7 @@
     V20260701.002-emotionranking [修复: 拼音搜索bug + 退市股隐藏 + 字体加大]
     V20260701.003-emotionranking [优化: 代码名称字体加大 + Alpha>3.5暗金色标记]
     V20260701.004-emotionranking [速度优化: 合并数据源到emotion_scores.json, 6请求→3请求]
+    V20260701.005-emotionranking [修复: emotion_scores改走GitHub Pages, 避免CDN缓存不一致导致名称丢失]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -120,15 +121,22 @@ var sortDirection = 'desc';
 var todayDate = '';
 
 // === URL配置 ===
+function getBaseUrl() {
+    if (window.location.hostname === 'pq-hahaha.github.io') {
+        return 'https://pq-hahaha.github.io/zt-board/';
+    }
+    return '';
+}
 function getCdnBase() {
     return 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
 }
+var PAGES_BASE = getBaseUrl();
 var CDN_BASE = getCdnBase();
 
 // === 数据加载 ===
 function loadData() {
     var tdUrl = CDN_BASE + 'trading_days.json';
-    var emotionUrl = CDN_BASE + 'emotion_scores.json';
+    var emotionUrl = PAGES_BASE + 'emotion_scores.json';
     var histUrl = CDN_BASE + 'emotion_scores_history.json';
 
     var tdPromise = fetch(tdUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
