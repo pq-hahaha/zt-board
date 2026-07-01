@@ -5,27 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>三维情绪强弱评分</title>
 <!--
-  版本序列号: V20260701.003-emotionranking
+  版本序列号: V20260701.004-emotionranking
   上线日期: 2026-07-01
   功能清单:
     1. 三维情绪强弱评分排行(总分/Alpha/Bonus/涨停根/跌停根)
     2. 分数变化(↑↓箭头+delta, 对比昨日, 用trading_days.json+history)
-    3. V2评分对照(V2分列, 颜色标注)
-    4. 拼音首字母搜索(pinyin_initials.json)
-    5. 股票池名称回退(stock_pool.json)
+    3. V2评分对照(嵌入emotion_scores.json, 无需额外加载)
+    4. 拼音首字母搜索(嵌入emotion_scores.json, 无需额外加载)
+    5. 名称映射(嵌入emotion_scores.json, 无需额外加载)
     6. CDN加速: 大数据文件走jsDelivr CDN
     7. 三种排序: 三维分/V2分/Alpha (点击表头切换)
-  数据加载:
-    - emotion_scores.json → jsDelivr CDN
+  数据加载(仅3个请求, 已合并冗余源):
+    - emotion_scores.json → jsDelivr CDN (含名称n/拼音py/V2分v2)
     - emotion_scores_history.json → jsDelivr CDN
     - trading_days.json → jsDelivr CDN
-    - stock_basic_scores_v2.json → jsDelivr CDN (只取V2分)
-    - stock_pool.json → jsDelivr CDN
-    - pinyin_initials.json → GitHub Pages
   版本历史:
     V20260701.001-emotionranking [基线]
     V20260701.002-emotionranking [修复: 拼音搜索bug + 退市股隐藏 + 字体加大]
     V20260701.003-emotionranking [优化: 代码名称字体加大 + Alpha>3.5暗金色标记]
+    V20260701.004-emotionranking [速度优化: 合并数据源到emotion_scores.json, 6请求→3请求]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -115,71 +113,35 @@ tr:hover { background: #f8f9fa; }
 <script>
 // === 全局状态 ===
 var allData = [];
-var nameMap = {};
-var pinyinMap = {};
 var emotionScores = {};
 var prevEmotionScores = {};
-var v2ScoresMap = {};  // code → V2分
 var currentSort = 'emotion';
 var sortDirection = 'desc';
 var todayDate = '';
 
 // === URL配置 ===
-function getBaseUrl() {
-    if (window.location.hostname === 'pq-hahaha.github.io') {
-        return 'https://pq-hahaha.github.io/zt-board/';
-    }
-    return '';
-}
 function getCdnBase() {
-    // 大文件走jsDelivr CDN
     return 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
 }
 var CDN_BASE = getCdnBase();
-var PAGES_BASE = getBaseUrl();
 
 // === 数据加载 ===
 function loadData() {
     var tdUrl = CDN_BASE + 'trading_days.json';
     var emotionUrl = CDN_BASE + 'emotion_scores.json';
     var histUrl = CDN_BASE + 'emotion_scores_history.json';
-    var v2Url = CDN_BASE + 'stock_basic_scores_v2.json';
-    var poolUrl = CDN_BASE + 'stock_pool.json';
-    var pinyinUrl = PAGES_BASE + 'pinyin_initials.json';
 
     var tdPromise = fetch(tdUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
     var emotionPromise = fetch(emotionUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
     var histPromise = fetch(histUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
-    var v2Promise = fetch(v2Url).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
-    var poolPromise = fetch(poolUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
-    var pinyinPromise = fetch(pinyinUrl).then(function(r) { return r.ok ? r.json() : {}; }).catch(function() { return {}; });
 
-    Promise.all([tdPromise, emotionPromise, histPromise, v2Promise, poolPromise, pinyinPromise])
+    Promise.all([tdPromise, emotionPromise, histPromise])
     .then(function(results) {
         var td = results[0];
         var emotionData = results[1];
         var histData = results[2];
-        var v2Data = results[3];
-        var poolData = results[4];
-        var pinyinData = results[5] || {};
 
-        // 名称映射
-        if (poolData) {
-            for (var i = 0; i < poolData.length; i++) {
-                var code = poolData[i].code.split('.')[0];
-                nameMap[code] = poolData[i].name;
-            }
-        }
-        pinyinMap = pinyinData;
-
-        // V2分数映射(只取V2总分)
-        if (v2Data && v2Data.scores) {
-            for (var c in v2Data.scores) {
-                v2ScoresMap[c] = v2Data.scores[c].s || 0;
-            }
-        }
-
-        // 三维分数
+        // 三维分数(n/py/v2已嵌入scores对象中, 无需额外加载)
         if (!emotionData || !emotionData.scores) {
             document.getElementById('rankBody').innerHTML =
                 '<tr><td colspan="10" class="loading" style="color:#e74c3c">三维评分数据加载失败</td></tr>';
@@ -228,7 +190,8 @@ function buildDisplayData() {
         var s = emotionScores[code];
         if (!s || typeof s.s !== 'number') continue;
 
-        var name = nameMap[code] || code;
+        // n/py/v2已嵌入scores对象中
+        var name = s.n || code;
         // 隐藏退市股(名称含"退")
         if (name.indexOf('退') >= 0) {
             skippedDelisted++;
@@ -242,13 +205,13 @@ function buildDisplayData() {
         allData.push({
             code: code,
             name: name,
-            pinyin: (pinyinMap[code] && pinyinMap[code].py) || '',
+            pinyin: s.py || '',
             score: s.s,
             alpha: s.alpha || 0,
             bonus: s.bonus || 0,
             lu: s.lu || 0,
             ld: s.ld || 0,
-            v2: v2ScoresMap[code] || 0,
+            v2: s.v2 || 0,
             delta: delta
         });
     }
