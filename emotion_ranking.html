@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>三维情绪强弱评分</title>
 <!--
-  版本序列号: V20260701.002-emotionranking
+  版本序列号: V20260701.003-emotionranking
   上线日期: 2026-07-01
   功能清单:
     1. 三维情绪强弱评分排行(总分/Alpha/Bonus/涨停根/跌停根)
@@ -25,6 +25,7 @@
   版本历史:
     V20260701.001-emotionranking [基线]
     V20260701.002-emotionranking [修复: 拼音搜索bug + 退市股隐藏 + 字体加大]
+    V20260701.003-emotionranking [优化: 代码名称字体加大 + Alpha>3.5暗金色标记]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -54,14 +55,15 @@ th.sort-desc::after { content: ' ↓'; }
 td { padding: 8px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; }
 tr:hover { background: #f8f9fa; }
 .td-rank { width: 50px; color: #888; font-size: 13px; }
-.td-code { color: #3498db; font-weight: 600; }
-.td-name { text-align: left; padding-left: 12px; }
-.score-total { font-weight: 700; font-size: 17px; }
+.td-code { color: #3498db; font-weight: 700; font-size: 15px; }
+.td-name { text-align: left; padding-left: 12px; font-size: 15px; }
+.name-gold { color: #B8860B; font-weight: 700; }
+.score-total { font-weight: 700; font-size: 18px; }
 .score-positive { color: #e74c3c; }
 .score-negative { color: #27ae60; }
 .score-zero { color: #888; }
 .score-delta { font-weight: 600; }
-.sub-score { color: #666; font-size: 13px; }
+.sub-score { color: #666; font-size: 14px; }
 .v2-score { font-weight: 600; }
 .v2-tier-1 { color: #e74c3c; } /* 20+ */
 .v2-tier-2 { color: #e67e22; } /* 15-20 */
@@ -331,11 +333,12 @@ function renderTable() {
         }
 
         var v2Class = getV2Tier(item.v2);
+        var nameClass = (item.alpha > 3.5) ? 'td-name name-gold' : 'td-name';
 
         html += '<tr>';
         html += '<td class="td-rank">' + rank + '</td>';
         html += '<td class="td-code">' + item.code + '</td>';
-        html += '<td class="td-name">' + item.name + '</td>';
+        html += '<td class="' + nameClass + '">' + item.name + '</td>';
         html += '<td class="score-total ' + scoreClass + '">' + (item.score > 0 ? '+' : '') + item.score + '</td>';
         html += '<td>' + deltaHtml + '</td>';
         html += '<td class="sub-score">' + (item.alpha > 0 ? '+' : '') + item.alpha + '</td>';
