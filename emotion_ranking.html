@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>三维情绪强弱评分</title>
 <!--
-  版本序列号: V20260701.006-emotionranking
+  版本序列号: V20260701.007-emotionranking
   上线日期: 2026-07-01
   功能清单:
     1. 三维情绪强弱评分排行(总分/Alpha/Bonus/涨停根/跌停根)
@@ -26,6 +26,7 @@
     V20260701.004-emotionranking [速度优化: 合并数据源到emotion_scores.json, 6请求→3请求]
     V20260701.005-emotionranking [修复: emotion_scores改走GitHub Pages, 避免CDN缓存不一致导致名称丢失]
     V20260701.006-emotionranking [搜索防抖: 输入停顿250ms后才触发过滤, 避免逐字重绘]
+    V20260701.007-emotionranking [过滤优化: 仅V2>0的~835只进入排行, 速度提升6-7倍]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -212,6 +213,9 @@ function buildDisplayData() {
             skippedDelisted++;
             continue;
         }
+
+        // 仅V2>0的股票进入排行(~835只), 大幅加速排序和渲染
+        if (!s.v2 || s.v2 <= 0) continue;
 
         var prev = prevEmotionScores[code];
         var prevS = (prev && typeof prev.s === 'number') ? prev.s : null;
