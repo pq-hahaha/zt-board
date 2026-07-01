@@ -27,6 +27,7 @@
     V20260701.005-emotionranking [修复: emotion_scores改走GitHub Pages, 避免CDN缓存不一致导致名称丢失]
     V20260701.006-emotionranking [搜索防抖: 输入停顿250ms后才触发过滤, 避免逐字重绘]
     V20260701.008-emotionranking [修复: 跨日边界Rp虚高 + histUrl改PAGES_BASE]
+    V20260701.009-emotionranking [修复: 变化栏fallback加载prev文件 + Q_MID=25000 + 调试日志]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -146,16 +147,24 @@ function loadData() {
     var tdUrl = CDN_BASE + 'trading_days.json';
     var emotionUrl = PAGES_BASE + 'emotion_scores.json';
     var histUrl = PAGES_BASE + 'emotion_scores_history.json';
+    var prevUrl = PAGES_BASE + 'emotion_scores_prev.json';
 
     var tdPromise = fetch(tdUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
     var emotionPromise = fetch(emotionUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
     var histPromise = fetch(histUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+    var prevPromise = fetch(prevUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
 
-    Promise.all([tdPromise, emotionPromise, histPromise])
+    Promise.all([tdPromise, emotionPromise, histPromise, prevPromise])
     .then(function(results) {
         var td = results[0];
         var emotionData = results[1];
         var histData = results[2];
+        var prevData = results[3];
+
+        console.log('[emotion] td days:', td && td.days ? td.days.length : 'null');
+        console.log('[emotion] emotionDate:', emotionData ? emotionData.date : 'null');
+        console.log('[emotion] histData:', histData ? (histData.history ? histData.history.length + ' entries' : 'no history') : 'null');
+        console.log('[emotion] prevData:', prevData ? (prevData.date + ', ' + Object.keys(prevData.scores || {}).length + ' scores') : 'null');
 
         // 三维分数(n/py/v2已嵌入scores对象中, 无需额外加载)
         if (!emotionData || !emotionData.scores) {
@@ -166,23 +175,36 @@ function loadData() {
         emotionScores = emotionData.scores;
         todayDate = emotionData.date || (td && td.days ? td.days[td.days.length-1] : '');
 
-        // 取昨日分数(用于delta)
+        // 取昨日分数(用于delta) —— 优先history(跨日), fallback prev文件(同日上一版)
         var latestDay = todayDate;
         var prevDay = null;
+        var deltaSource = 'none';
         if (td && td.days && td.days.length >= 2) {
             latestDay = td.days[td.days.length - 1];
             prevDay = td.days[td.days.length - 2];
         }
 
+        // 方法1: history中找前一交易日
         if (histData && histData.history && prevDay) {
             for (var hi = 0; hi < histData.history.length; hi++) {
                 var h = histData.history[hi];
                 if (h.date === prevDay) {
                     prevEmotionScores = h.scores || {};
+                    deltaSource = 'history(' + prevDay + ')';
                     break;
                 }
             }
         }
+
+        // 方法2: fallback → 加载prev文件(同日上一版参数跑的分, 至少能看到箭头)
+        if (deltaSource === 'none' && prevData && prevData.scores && prevData.date) {
+            prevEmotionScores = prevData.scores;
+            deltaSource = 'prevfile(' + prevData.date + ')';
+            // prevDay无意义时用prev文件日期
+            if (!prevDay) prevDay = prevData.date;
+        }
+
+        console.log('[emotion] deltaSource:', deltaSource, ', prevScores:', Object.keys(prevEmotionScores).length);
 
         // 构建显示数据
         buildDisplayData();
@@ -190,10 +212,11 @@ function loadData() {
 
         // 日期信息
         var dateInfo = '三维评分日期: ' + todayDate;
-        if (prevDay) dateInfo += ' | 对比: ' + prevDay;
+        if (deltaSource !== 'none') dateInfo += ' | 对比源: ' + deltaSource;
         dateInfo += ' | 股票数: ' + allData.length;
         document.getElementById('dateInfo').textContent = dateInfo;
     }).catch(function(e) {
+        console.error('[emotion] load error:', e);
         document.getElementById('rankBody').innerHTML =
             '<tr><td colspan="10" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
     });
@@ -276,7 +299,7 @@ function renderTable() {
 
     // 统计栏
     var posCnt = 0, negCnt = 0, zeroCnt = 0;
-    var posDelta = 0, negDelta = 0;
+    var posDelta = 0, negDelta = 0, nullDelta = 0;
     for (var i = 0; i < allData.length; i++) {
         var sc = allData[i].score;
         if (sc > 0) posCnt++;
@@ -285,8 +308,12 @@ function renderTable() {
         if (allData[i].delta !== null) {
             if (allData[i].delta > 0) posDelta++;
             else if (allData[i].delta < 0) negDelta++;
+        } else {
+            nullDelta++;
         }
     }
+    console.log('[emotion] render: pos=' + posCnt + ' neg=' + negCnt + ' zero=' + zeroCnt +
+                ' dUp=' + posDelta + ' dDown=' + negDelta + ' dNull=' + nullDelta);
     document.getElementById('statsBar').innerHTML =
         '<span class="stats-chip">正分: <b style="color:#e74c3c">' + posCnt + '</b></span>' +
         '<span class="stats-chip">零分: <b>' + zeroCnt + '</b></span>' +
