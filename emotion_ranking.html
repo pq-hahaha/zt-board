@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>三维情绪强弱评分</title>
 <!--
-  版本序列号: V20260701.005-emotionranking
+  版本序列号: V20260701.006-emotionranking
   上线日期: 2026-07-01
   功能清单:
     1. 三维情绪强弱评分排行(总分/Alpha/Bonus/涨停根/跌停根)
@@ -25,6 +25,7 @@
     V20260701.003-emotionranking [优化: 代码名称字体加大 + Alpha>3.5暗金色标记]
     V20260701.004-emotionranking [速度优化: 合并数据源到emotion_scores.json, 6请求→3请求]
     V20260701.005-emotionranking [修复: emotion_scores改走GitHub Pages, 避免CDN缓存不一致导致名称丢失]
+    V20260701.006-emotionranking [搜索防抖: 输入停顿250ms后才触发过滤, 避免逐字重绘]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -83,7 +84,7 @@ tr:hover { background: #f8f9fa; }
 </div>
 <div class="stats-bar" id="statsBar"></div>
 <div class="filter-bar">
-    <input type="text" id="filterInput" placeholder="搜索代码/名称/拼音" oninput="renderTable()">
+    <input type="text" id="filterInput" placeholder="搜索代码/名称/拼音" oninput="onFilterInput()">
     <span id="countInfo"></span>
 </div>
 <div class="ranking-table">
@@ -120,7 +121,13 @@ var currentSort = 'emotion';
 var sortDirection = 'desc';
 var todayDate = '';
 
-// === URL配置 ===
+// === 搜索防抖 ===
+var filterTimer = null;
+var FILTER_DELAY = 250; // 停250ms才触发搜索
+function onFilterInput() {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(renderTable, FILTER_DELAY);
+}
 function getBaseUrl() {
     if (window.location.hostname === 'pq-hahaha.github.io') {
         return 'https://pq-hahaha.github.io/zt-board/';
