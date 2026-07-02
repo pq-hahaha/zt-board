@@ -516,7 +516,7 @@ function rebuildDisplayDataFromScores(scores, scoreData) {
         var item = {
             code: code,
             name: nameMap[code] || code,
-            pinyin: (typeof pinyinMap[code] === 'string') ? pinyinMap[code] : '',
+            pinyin: (pinyinMap[code] && pinyinMap[code].py) ? pinyinMap[code].py : '',
             score: s.s,
             r1: s.r1 || 0,
             r2: s.r2 || 0,
