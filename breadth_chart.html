@@ -1,7 +1,7 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260629.002-dongtaitongbu-cdnqiehuan-guananchiyouxian-kxianshujuchaisu
+  版本序列号: V20260703.001-guananchituozhuapaixu
   上线日期: 2026-06-29
   基于版本: V20260629.001 (cea92a0)
   功能清单:
@@ -95,6 +95,8 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
 .wl-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#e8f4fd; border:1px solid #b8d8f0; border-radius:12px; font-size:12px; cursor:pointer; transition:all 0.2s; user-select:none; }
 .wl-chip:hover { background:#d0e8fc; border-color:#3498db; }
 .wl-chip.selected { background:#fadbd8; border-color:#e74c3c; }
+.wl-chip.dragging { opacity:0.4; }
+.wl-chip.drag-over { border:2px dashed #e74c3c; background:#fff5f5; }
 .chip-x { color:#aaa; font-size:14px; font-weight:bold; padding:0 2px; cursor:pointer; }
 .chip-x:hover { color:#e74c3c; }
 .wl-del-btn { font-size:11px; padding:2px 8px; background:#e74c3c; color:#fff; border:none; border-radius:3px; cursor:pointer; }
@@ -621,7 +623,7 @@ function renderWatchlist() {
             html += '<input type="checkbox" ' + (sel ? 'checked' : '') + ' style="margin-right:3px;pointer-events:none;">';
             html += displayName + '(' + item.code + ')</div>';
         } else {
-            html += '<div class="wl-chip" onclick="loadFromWatchlist(\'' + item.code + '\')">';
+            html += '<div class="wl-chip" draggable="true" data-code="' + item.code + '" onclick="loadFromWatchlist(\'' + item.code + '\')" ondragstart="onWlDragStart(event,this)" ondragover="onWlDragOver(event,this)" ondragleave="onWlDragLeave(this)" ondrop="onWlDrop(event,\'' + item.code + '\')" ondragend="onWlDragEnd(this)">';
             html += '<span>' + displayName + '(' + item.code + ')</span>';
             var scoreObj = basicScoresV2[item.code];
             if (scoreObj && scoreObj.s > 0) {
@@ -631,6 +633,24 @@ function renderWatchlist() {
         }
     }
     container.innerHTML = html;
+}
+
+// === 观察池拖拽排序 ===
+var wlDragSrcCode = null;
+function onWlDragStart(e, el) { wlDragSrcCode = el.dataset.code; e.dataTransfer.effectAllowed='move'; el.classList.add('dragging'); }
+function onWlDragOver(e, el) { e.preventDefault(); e.dataTransfer.dropEffect='move'; el.classList.add('drag-over'); }
+function onWlDragLeave(el) { el.classList.remove('drag-over'); }
+function onWlDrop(e, toCode) { e.preventDefault(); e.stopPropagation(); if(!wlDragSrcCode||wlDragSrcCode===toCode) return; reorderWatchlist(wlDragSrcCode, toCode); }
+function onWlDragEnd(el) { el.classList.remove('dragging'); var all=document.querySelectorAll('.wl-chip.drag-over'); for(var i=0;i<all.length;i++) all[i].classList.remove('drag-over'); wlDragSrcCode=null; }
+function reorderWatchlist(fromCode, toCode) {
+    var list = getWatchlist();
+    var fi=-1, ti=-1;
+    for(var i=0;i<list.length;i++){ if(list[i].code===fromCode)fi=i; if(list[i].code===toCode)ti=i; }
+    if(fi<0||ti<0||fi===ti) return;
+    var moved = list.splice(fi,1)[0];
+    list.splice(ti,0,moved);
+    saveWatchlist(list);
+    renderWatchlist();
 }
 
 // === 同步观察池(图谱页版本) ===
