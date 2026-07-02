@@ -1,7 +1,7 @@
 <!--
 ============================================
   个股评分排行 - 正式运营版
-  版本序列号: V20260630.001-tradingdaysjiarudelta
+  版本序列号: V20260702.001-xiufupinyinindexof
   上线日期: 2026-06-30
   功能清单:
     1. V2评分排行(总分/维度r1,r2,r3)
@@ -516,7 +516,7 @@ function rebuildDisplayDataFromScores(scores, scoreData) {
         var item = {
             code: code,
             name: nameMap[code] || code,
-            pinyin: pinyinMap[code] || '',
+            pinyin: (typeof pinyinMap[code] === 'string') ? pinyinMap[code] : '',
             score: s.s,
             r1: s.r1 || 0,
             r2: s.r2 || 0,
@@ -623,7 +623,7 @@ function renderTable() {
         filtered = displayData.filter(function(item) {
             return item.code.indexOf(filter) >= 0 ||
                    item.name.toLowerCase().indexOf(filter) >= 0 ||
-                   item.pinyin.indexOf(filter) >= 0;
+                   (typeof item.pinyin === 'string') && item.pinyin.indexOf(filter) >= 0;
         });
     }
 
