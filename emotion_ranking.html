@@ -29,6 +29,7 @@
     V20260701.008-emotionranking [修复: 跨日边界Rp虚高 + histUrl改PAGES_BASE]
     V20260701.009-emotionranking [修复: 变化栏fallback加载prev文件 + Q_MID=25000 + 调试日志]
     V20260702.001-emotionranking [风格调亮: 去深色头部/红色表头 + Alpha/V2字体放大]
+    V20260702.002-emotionranking [三维分/Alpha/V2分 min筛选 + 筛选/重置按钮]
 -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,11 +45,19 @@ body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; ba
 .filter-bar input { padding: 5px 10px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; width: 200px; outline: none; }
 .filter-bar input:focus { border-color: #3498db; }
 .filter-bar #countInfo { color: #888; font-size: 12px; margin-left: auto; }
+.range-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.range-bar label { font-size: 13px; color: #555; white-space: nowrap; }
+.range-bar input { padding: 5px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; width: 80px; outline: none; text-align: center; }
+.range-bar input:focus { border-color: #3498db; }
+.range-btn { padding: 5px 14px; font-size: 13px; border: 1px solid #3498db; border-radius: 4px; cursor: pointer; background: #3498db; color: white; font-weight: 600; }
+.range-btn:hover { background: #2980b9; }
+.range-btn-reset { padding: 5px 14px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #fff; color: #555; }
+.range-btn-reset:hover { background: #f0f0f0; }
 .stats-bar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .stats-chip { padding: 4px 10px; background: #ecf0f1; border-radius: 12px; font-size: 12px; color: #555; }
 .stats-chip b { color: #c0392b; }
 .ranking-table { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
-.table-scroll { max-height: calc(100vh - 160px); overflow-y: auto; }
+.table-scroll { max-height: calc(100vh - 210px); overflow-y: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 thead { position: sticky; top: 0; z-index: 10; }
 th { background: #e74c3c; color: white; padding: 8px 6px; text-align: center; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; font-size: 13px; }
@@ -91,6 +100,16 @@ tr:hover { background: #fef5f5; }
     <input type="text" id="filterInput" placeholder="搜索代码/名称/拼音" oninput="onFilterInput()">
     <span id="countInfo"></span>
 </div>
+<div class="range-bar">
+    <label>三维分 ≥</label>
+    <input type="number" id="minEmotion" placeholder="">
+    <label>Alpha ≥</label>
+    <input type="number" id="minAlpha" placeholder="">
+    <label>V2分 ≥</label>
+    <input type="number" id="minV2" placeholder="">
+    <button class="range-btn" onclick="applyFilter()">筛选</button>
+    <button class="range-btn-reset" onclick="resetFilter()">重置</button>
+</div>
 <div class="ranking-table">
 <div class="table-scroll">
     <table>
@@ -131,6 +150,29 @@ var FILTER_DELAY = 250; // 停250ms才触发搜索
 function onFilterInput() {
     clearTimeout(filterTimer);
     filterTimer = setTimeout(renderTable, FILTER_DELAY);
+}
+
+// === 分数范围筛选 ===
+function getScoreFilter() {
+    var v = parseFloat(document.getElementById('minEmotion').value);
+    var a = parseFloat(document.getElementById('minAlpha').value);
+    var v2 = parseFloat(document.getElementById('minV2').value);
+    return {
+        minEmotion: isNaN(v) ? -Infinity : v,
+        minAlpha: isNaN(a) ? -Infinity : a,
+        minV2: isNaN(v2) ? -Infinity : v2
+    };
+}
+
+function applyFilter() {
+    renderTable();
+}
+
+function resetFilter() {
+    document.getElementById('minEmotion').value = '';
+    document.getElementById('minAlpha').value = '';
+    document.getElementById('minV2').value = '';
+    renderTable();
 }
 function getBaseUrl() {
     if (window.location.hostname === 'pq-hahaha.github.io') {
@@ -258,13 +300,21 @@ function renderTable() {
         return sortDirection === 'desc' ? bv - av : av - bv;
     });
 
-    // 过滤
+    // 过滤: 文本搜索
     var filtered = allData;
     if (filter) {
         filtered = allData.filter(function(item) {
             return item.code.indexOf(filter) >= 0 ||
                    item.name.toLowerCase().indexOf(filter) >= 0 ||
                    item.pinyin.indexOf(filter) >= 0;
+        });
+    }
+
+    // 过滤: 分数范围(AND关系)
+    var sf = getScoreFilter();
+    if (sf.minEmotion > -Infinity || sf.minAlpha > -Infinity || sf.minV2 > -Infinity) {
+        filtered = filtered.filter(function(item) {
+            return item.score >= sf.minEmotion && item.alpha >= sf.minAlpha && item.v2 >= sf.minV2;
         });
     }
 
