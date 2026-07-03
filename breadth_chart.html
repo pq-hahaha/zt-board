@@ -670,13 +670,12 @@ function syncFollowList() {
     loadBasicScoresV2().then(function() {
         var wlList = getWatchlist();
         var srList = getScoreRankFollow();
-        var map = {};
-        wlList.forEach(function(item) { map[item.code] = item; });
+        var wlCodes = {};
+        wlList.forEach(function(item) { wlCodes[item.code] = true; });
+        var merged = wlList.slice(); // 保留拖拽顺序
         srList.forEach(function(item) {
-            if (!map[item.code]) map[item.code] = item;
+            if (!wlCodes[item.code]) merged.push(item); // sr独有的追加末尾
         });
-        var merged = [];
-        for (var code in map) merged.push(map[code]);
         var removed = [];
         try { removed = JSON.parse(localStorage.getItem(WL_REMOVED_KEY)) || []; } catch(e) {}
         if (removed.length > 0) {
