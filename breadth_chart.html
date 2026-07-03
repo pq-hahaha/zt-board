@@ -1,7 +1,7 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260703.001-guananchituozhuapaixu
+  版本序列号: V20260703.002-guananchituozhuapaixu-cdnbusting
   上线日期: 2026-06-29
   基于版本: V20260629.001 (cea92a0)
   功能清单:
@@ -188,10 +188,13 @@ function getBaseUrl() {
 }
 // V004: 数据文件走GitHub Pages(东京NRT节点, 比jsDelivr法兰克福近), 不走jsDelivr
 var CDN_BASE = getBaseUrl();
+// 缓存busting版本号: 每次更新pinyin/pool数据时改此值, 强制CDN回源
+var PY_VERSION = '20260703';
+var POOL_VERSION = '20260703';
 
 function loadPinyinMap() {
     if (pinyinLoaded) return;
-    fetch(getBaseUrl() + 'pinyin_initials.json').then(function(r) { return r.json(); }).then(function(d) {
+    fetch(getBaseUrl() + 'pinyin_initials.json?v=' + PY_VERSION).then(function(r) { return r.json(); }).then(function(d) {
         pinyinMap = d;
         pinyinLoaded = true;
         // V004: pinyin_initials.json含name字段, 填充stockNames供搜索和显示
