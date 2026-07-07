@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三维情绪强弱评分</title>
+<!--
+  版本序列号: V20260702.001-emotionranking
+  上线日期: 2026-07-01
+  功能清单:
+    1. 三维情绪强弱评分排行(总分/Alpha/Bonus/涨停根/跌停根)
+    2. 分数变化(↑↓箭头+delta, 对比昨日, 用trading_days.json+history)
+    3. V2评分对照(嵌入emotion_scores.json, 无需额外加载)
+    4. 拼音首字母搜索(嵌入emotion_scores.json, 无需额外加载)
+    5. 名称映射(嵌入emotion_scores.json, 无需额外加载)
+    6. CDN加速: 大数据文件走jsDelivr CDN
+    7. 三种排序: 三维分/V2分/Alpha (点击表头切换)
+  数据加载(仅3个请求, 已合并冗余源):
+    - emotion_scores.json → GitHub Pages直连 (含名称n/拼音py/V2分v2, 避免CDN缓存不一致)
+    - emotion_scores_history.json → jsDelivr CDN
+    - trading_days.json → jsDelivr CDN
+  版本历史:
+    V20260701.001-emotionranking [基线]
+    V20260701.002-emotionranking [修复: 拼音搜索bug + 退市股隐藏 + 字体加大]
+    V20260701.003-emotionranking [优化: 代码名称字体加大 + Alpha>3.5暗金色标记]
+    V20260701.004-emotionranking [速度优化: 合并数据源到emotion_scores.json, 6请求→3请求]
+    V20260701.005-emotionranking [修复: emotion_scores改走GitHub Pages, 避免CDN缓存不一致导致名称丢失]
+    V20260701.006-emotionranking [搜索防抖: 输入停顿250ms后才触发过滤, 避免逐字重绘]
+    V20260701.008-emotionranking [修复: 跨日边界Rp虚高 + histUrl改PAGES_BASE]
+    V20260701.009-emotionranking [修复: 变化栏fallback加载prev文件 + Q_MID=25000 + 调试日志]
+    V20260702.001-emotionranking [风格调亮: 去深色头部/红色表头 + Alpha/V2字体放大]
+    V20260702.002-emotionranking [三维分/Alpha/V2分 min筛选 + 筛选/重置按钮]
+-->
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f5f6fa; color: #333; font-size: 15px; padding: 10px; }
+.header { text-align: center; margin-bottom: 10px; }
+.header h1 { font-size: 20px; color: #c0392b; margin-bottom: 4px; }
+.header p { font-size: 13px; color: #888; }
+.ranking-wrap { max-width: 1100px; margin: 0 auto; padding: 0; }
+.link-back { margin-bottom: 12px; }
+.link-back a { color: #3498db; text-decoration: none; font-size: 13px; }
+.link-back a:hover { text-decoration: underline; }
+.filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.filter-bar input { padding: 5px 10px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; width: 200px; outline: none; }
+.filter-bar input:focus { border-color: #3498db; }
+.filter-bar #countInfo { color: #888; font-size: 12px; margin-left: auto; }
+.range-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.range-bar label { font-size: 13px; color: #555; white-space: nowrap; }
+.range-bar input { padding: 5px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; width: 80px; outline: none; text-align: center; }
+.range-bar input:focus { border-color: #3498db; }
+.range-btn { padding: 5px 14px; font-size: 13px; border: 1px solid #3498db; border-radius: 4px; cursor: pointer; background: #3498db; color: white; font-weight: 600; }
+.range-btn:hover { background: #2980b9; }
+.range-btn-reset { padding: 5px 14px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #fff; color: #555; }
+.range-btn-reset:hover { background: #f0f0f0; }
+.stats-bar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.stats-chip { padding: 4px 10px; background: #ecf0f1; border-radius: 12px; font-size: 12px; color: #555; }
+.stats-chip b { color: #c0392b; }
+.ranking-table { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
+.table-scroll { max-height: calc(100vh - 210px); overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+thead { position: sticky; top: 0; z-index: 10; }
+th { background: #e74c3c; color: white; padding: 8px 6px; text-align: center; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; font-size: 13px; }
+th:hover { background: #c0392b; }
+th.sort-active { background: #e74c3c; }
+th.sort-asc::after { content: ' ↑'; }
+th.sort-desc::after { content: ' ↓'; }
+td { padding: 7px 6px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+tr:hover { background: #fef5f5; }
+.td-rank { width: 45px; color: #999; font-size: 13px; }
+.td-code { color: #3498db; font-weight: 700; font-size: 14px; }
+.td-name { text-align: left; padding-left: 10px; font-size: 14px; font-weight: 500; }
+.name-gold { color: #B8860B; font-weight: 700; }
+.score-total { font-weight: 700; font-size: 17px; }
+.score-positive { color: #e74c3c; }
+.score-negative { color: #27ae60; }
+.score-zero { color: #888; }
+.score-delta { font-weight: 600; font-size: 14px; }
+.sub-score { color: #666; font-size: 17px; font-weight: 700; }
+.v2-score { font-weight: 700; font-size: 17px; }
+.v2-tier-1 { color: #e74c3c; } /* 20+ */
+.v2-tier-2 { color: #e67e22; } /* 15-20 */
+.v2-tier-3 { color: #f39c12; } /* 10-15 */
+.v2-tier-4 { color: #27ae60; } /* 5-10 */
+.v2-tier-5 { color: #95a5a6; } /* 0-5 */
+.loading { text-align: center; padding: 60px; color: #aaa; font-size: 16px; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>三维情绪强弱评分</h1>
+    <p id="dateInfo">加载中...</p>
+</div>
+<div class="ranking-wrap">
+<div class="link-back">
+    <a href="breadth_chart.html">返回图谱</a> | <a href="score_ranking.html">V2评分排行</a>
+</div>
+<div class="stats-bar" id="statsBar"></div>
+<div class="filter-bar">
+    <input type="text" id="filterInput" placeholder="搜索代码/名称/拼音" oninput="onFilterInput()">
+    <span id="countInfo"></span>
+</div>
+<div class="range-bar">
+    <label>三维分 ≥</label>
+    <input type="number" id="minEmotion" placeholder="">
+    <label>Alpha ≥</label>
+    <input type="number" id="minAlpha" placeholder="">
+    <label>V2分 ≥</label>
+    <input type="number" id="minV2" placeholder="">
+    <button class="range-btn" onclick="applyFilter()">筛选</button>
+    <button class="range-btn-reset" onclick="resetFilter()">重置</button>
+</div>
+<div class="ranking-table">
+<div class="table-scroll">
+    <table>
+        <thead>
+            <tr>
+                <th class="sortable" data-sort="rank" id="thRank">排名</th>
+                <th>代码</th>
+                <th>名称</th>
+                <th class="sortable" data-sort="emotion" id="thEmotion">三维分</th>
+                <th class="sortable" data-sort="delta" id="thDelta">变化</th>
+                <th class="sortable" data-sort="alpha" id="thAlpha">Alpha</th>
+                <th>Bonus</th>
+                <th>涨停根</th>
+                <th>跌停根</th>
+                <th class="sortable" data-sort="v2" id="thV2">V2分</th>
+            </tr>
+        </thead>
+        <tbody id="rankBody">
+            <tr><td colspan="10" class="loading">正在加载三维评分数据...</td></tr>
+        </tbody>
+    </table>
+</div>
+</div>
+</div>
+
+<script>
+// === 全局状态 ===
+var allData = [];
+var emotionScores = {};
+var prevEmotionScores = {};
+var currentSort = 'emotion';
+var sortDirection = 'desc';
+var todayDate = '';
+
+// === 搜索防抖 ===
+var filterTimer = null;
+var FILTER_DELAY = 250; // 停250ms才触发搜索
+function onFilterInput() {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(renderTable, FILTER_DELAY);
+}
+
+// === 分数范围筛选 ===
+function getScoreFilter() {
+    var v = parseFloat(document.getElementById('minEmotion').value);
+    var a = parseFloat(document.getElementById('minAlpha').value);
+    var v2 = parseFloat(document.getElementById('minV2').value);
+    return {
+        minEmotion: isNaN(v) ? -Infinity : v,
+        minAlpha: isNaN(a) ? -Infinity : a,
+        minV2: isNaN(v2) ? -Infinity : v2
+    };
+}
+
+function applyFilter() {
+    renderTable();
+}
+
+function resetFilter() {
+    document.getElementById('minEmotion').value = '';
+    document.getElementById('minAlpha').value = '';
+    document.getElementById('minV2').value = '';
+    renderTable();
+}
+function getBaseUrl() {
+    if (window.location.hostname === 'pq-hahaha.github.io') {
+        return 'https://pq-hahaha.github.io/zt-board/';
+    }
+    return '';
+}
+function getCdnBase() {
+    return 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
+}
+var PAGES_BASE = getBaseUrl();
+var CDN_BASE = getCdnBase();
+
+// === 数据加载 ===
+function loadData() {
+    var tdUrl = CDN_BASE + 'trading_days.json';
+    var emotionUrl = PAGES_BASE + 'emotion_scores.json';
+    var prevUrl = PAGES_BASE + 'emotion_scores_prev.json';
+
+    var tdPromise = fetch(tdUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+    var emotionPromise = fetch(emotionUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+    var prevPromise = fetch(prevUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+
+    Promise.all([tdPromise, emotionPromise, prevPromise])
+    .then(function(results) {
+        var td = results[0];
+        var emotionData = results[1];
+        var prevData = results[2];
+
+        if (!emotionData || !emotionData.scores) {
+            document.getElementById('rankBody').innerHTML =
+                '<tr><td colspan="10" class="loading" style="color:#e74c3c">三维评分数据加载失败</td></tr>';
+            return;
+        }
+        emotionScores = emotionData.scores;
+        todayDate = emotionData.date || '';
+
+        // 直接读emotion_scores_prev.json作为前一交易日分数 (同算法, 双窗口生成)
+        if (prevData && prevData.scores) {
+            prevEmotionScores = prevData.scores;
+            console.log('[emotion] prev loaded:', prevData.date, Object.keys(prevEmotionScores).length, 'stocks');
+        } else {
+            console.warn('[emotion] prev data not available, delta disabled');
+        }
+
+        // 取上一交易日(用于显示)
+        var prevDay = null;
+        if (td && td.days && td.days.length >= 2) {
+            prevDay = td.days[td.days.length - 2];
+        }
+
+        buildDisplayData();
+        renderTable();
+
+        var dateInfo = '三维评分日期: ' + todayDate;
+        if (prevDay) dateInfo += ' | 对比: ' + prevDay;
+        dateInfo += ' | 股票数: ' + allData.length;
+        document.getElementById('dateInfo').textContent = dateInfo;
+    }).catch(function(e) {
+        console.error('[emotion] load error:', e);
+        document.getElementById('rankBody').innerHTML =
+            '<tr><td colspan="10" class="loading" style="color:#e74c3c">加载失败: ' + e.message + '</td></tr>';
+    });
+}
+
+function buildDisplayData() {
+    allData = [];
+    var skippedDelisted = 0;
+    for (var code in emotionScores) {
+        var s = emotionScores[code];
+        if (!s || typeof s.s !== 'number') continue;
+
+        // n/py/v2已嵌入scores对象中
+        var name = s.n || code;
+        // 隐藏退市股(名称含"退")
+        if (name.indexOf('退') >= 0) {
+            skippedDelisted++;
+            continue;
+        }
+
+        // 仅V2>0的股票进入排行(~835只), 大幅加速排序和渲染
+        if (!s.v2 || s.v2 <= 0) continue;
+
+        var prev = prevEmotionScores[code];
+        var prevS = (prev && typeof prev.s === 'number') ? prev.s : null;
+        var delta = (prevS !== null) ? (s.s - prevS) : null;
+
+        allData.push({
+            code: code,
+            name: name,
+            pinyin: s.py || '',
+            score: s.s,
+            alpha: s.alpha || 0,
+            bonus: s.bonus || 0,
+            lu: s.lu || 0,
+            ld: s.ld || 0,
+            v2: s.v2 || 0,
+            delta: delta
+        });
+    }
+}
+
+function getV2Tier(v2) {
+    if (v2 >= 20) return 'v2-tier-1';
+    if (v2 >= 15) return 'v2-tier-2';
+    if (v2 >= 10) return 'v2-tier-3';
+    if (v2 >= 5) return 'v2-tier-4';
+    return 'v2-tier-5';
+}
+
+function renderTable() {
+    var filter = document.getElementById('filterInput').value.toLowerCase().trim();
+
+    // 排序
+    allData.sort(function(a, b) {
+        var av, bv;
+        if (currentSort === 'emotion') { av = a.score; bv = b.score; }
+        else if (currentSort === 'alpha') { av = a.alpha; bv = b.alpha; }
+        else if (currentSort === 'v2') { av = a.v2; bv = b.v2; }
+        else if (currentSort === 'delta') {
+            av = (a.delta !== null) ? a.delta : -9999;
+            bv = (b.delta !== null) ? b.delta : -9999;
+        }
+        else { av = 0; bv = 0; }
+        return sortDirection === 'desc' ? bv - av : av - bv;
+    });
+
+    // 过滤: 文本搜索
+    var filtered = allData;
+    if (filter) {
+        filtered = allData.filter(function(item) {
+            return item.code.indexOf(filter) >= 0 ||
+                   item.name.toLowerCase().indexOf(filter) >= 0 ||
+                   item.pinyin.indexOf(filter) >= 0;
+        });
+    }
+
+    // 过滤: 分数范围(AND关系)
+    var sf = getScoreFilter();
+    if (sf.minEmotion > -Infinity || sf.minAlpha > -Infinity || sf.minV2 > -Infinity) {
+        filtered = filtered.filter(function(item) {
+            return item.score >= sf.minEmotion && item.alpha >= sf.minAlpha && item.v2 >= sf.minV2;
+        });
+    }
+
+    // 统计
+    document.getElementById('countInfo').textContent = '显示 ' + filtered.length + ' / ' + allData.length + ' 只';
+
+    // 统计栏
+    var posCnt = 0, negCnt = 0, zeroCnt = 0;
+    var posDelta = 0, negDelta = 0, nullDelta = 0;
+    for (var i = 0; i < allData.length; i++) {
+        var sc = allData[i].score;
+        if (sc > 0) posCnt++;
+        else if (sc < 0) negCnt++;
+        else zeroCnt++;
+        if (allData[i].delta !== null) {
+            if (allData[i].delta > 0) posDelta++;
+            else if (allData[i].delta < 0) negDelta++;
+        } else {
+            nullDelta++;
+        }
+    }
+    console.log('[emotion] render: pos=' + posCnt + ' neg=' + negCnt + ' zero=' + zeroCnt +
+                ' dUp=' + posDelta + ' dDown=' + negDelta + ' dNull=' + nullDelta);
+    document.getElementById('statsBar').innerHTML =
+        '<span class="stats-chip">正分: <b style="color:#e74c3c">' + posCnt + '</b></span>' +
+        '<span class="stats-chip">零分: <b>' + zeroCnt + '</b></span>' +
+        '<span class="stats-chip">负分: <b style="color:#27ae60">' + negCnt + '</b></span>' +
+        '<span class="stats-chip">今日↑: <b style="color:#e74c3c">' + posDelta + '</b></span>' +
+        '<span class="stats-chip">今日↓: <b style="color:#27ae60">' + negDelta + '</b></span>';
+
+    // 渲染
+    var html = '';
+    for (var j = 0; j < filtered.length; j++) {
+        var item = filtered[j];
+        var rank = j + 1;
+        var scoreClass = item.score > 0 ? 'score-positive' : (item.score < 0 ? 'score-negative' : 'score-zero');
+
+        // Delta
+        var deltaHtml = '--';
+        if (item.delta !== null) {
+            var deltaRound = Math.round(item.delta * 100) / 100;
+            if (deltaRound > 0) {
+                deltaHtml = '<span style="color:#e74c3c" class="score-delta">↑+' + deltaRound + '</span>';
+            } else if (deltaRound < 0) {
+                deltaHtml = '<span style="color:#27ae60" class="score-delta">↓' + deltaRound + '</span>';
+            } else {
+                deltaHtml = '<span style="color:#999">--</span>';
+            }
+        }
+
+        var v2Class = getV2Tier(item.v2);
+        var nameClass = (item.alpha > 3.5) ? 'td-name name-gold' : 'td-name';
+
+        html += '<tr>';
+        html += '<td class="td-rank">' + rank + '</td>';
+        html += '<td class="td-code">' + item.code + '</td>';
+        html += '<td class="' + nameClass + '">' + item.name + '</td>';
+        html += '<td class="score-total ' + scoreClass + '">' + (item.score > 0 ? '+' : '') + item.score + '</td>';
+        html += '<td>' + deltaHtml + '</td>';
+        html += '<td class="sub-score">' + (item.alpha > 0 ? '+' : '') + item.alpha + '</td>';
+        html += '<td class="sub-score">' + (item.bonus > 0 ? '+' : '') + item.bonus + '</td>';
+        html += '<td class="sub-score">' + item.lu + '</td>';
+        html += '<td class="sub-score">' + item.ld + '</td>';
+        html += '<td class="v2-score ' + v2Class + '">' + item.v2 + '</td>';
+        html += '</tr>';
+    }
+
+    if (filtered.length === 0) {
+        html = '<tr><td colspan="10" class="loading">无匹配数据</td></tr>';
+    }
+
+    document.getElementById('rankBody').innerHTML = html;
+
+    // 更新表头排序状态
+    updateSortHeaders();
+}
+
+function updateSortHeaders() {
+    var ths = document.querySelectorAll('th.sortable');
+    ths.forEach(function(th) {
+        th.classList.remove('sort-active', 'sort-asc', 'sort-desc');
+        var sortKey = th.getAttribute('data-sort');
+        if (sortKey === currentSort || (currentSort === 'rank' && sortKey === 'rank')) {
+            th.classList.add('sort-active');
+            th.classList.add(sortDirection === 'desc' ? 'sort-desc' : 'sort-asc');
+        }
+    });
+}
+
+// 表头点击排序
+document.querySelectorAll('th.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var sortKey = th.getAttribute('data-sort');
+        if (sortKey === 'rank') {
+            // 排名列: 切回三维分排序
+            currentSort = 'emotion';
+            sortDirection = 'desc';
+        } else {
+            if (currentSort === sortKey) {
+                sortDirection = sortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSort = sortKey;
+                sortDirection = 'desc';
+            }
+        }
+        renderTable();
+    });
+});
+
+// 启动
+loadData();
+</script>
+</body>
+</html>

@@ -181,7 +181,10 @@ function getBaseUrl() {
     return '';
 }
 function getCdnBase() {
-    return 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
+    if (window.location.hostname === 'pq-hahaha.github.io') {
+        return 'https://cdn.jsdelivr.net/gh/pq-hahaha/zt-board@main/';
+    }
+    return '';
 }
 var PAGES_BASE = getBaseUrl();
 var CDN_BASE = getCdnBase();
