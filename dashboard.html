@@ -23,6 +23,11 @@ body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; backgro
 .c-orange { border-top: 4px solid #CC6600; }
 .c-red { border-top: 4px solid #C00000; }
 .footer { text-align: center; font-size: 12px; color: #bbb; padding: 24px 0 8px; }
+.fr-btn { display: inline-block; background: #666; color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-size: 14px; cursor: pointer; transition: background 0.2s; }
+.fr-btn:hover { background: #888; }
+.fr-btn.on { background: #C00000; }
+.fr-btn.on:hover { background: #D00000; }
+.toolbar { margin-bottom: 20px; text-align: right; }
 </style>
 </head>
 <body>
@@ -30,6 +35,9 @@ body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; backgro
   <div class="header">
     <h1>本地看板</h1>
     <p>HTTP Server localhost:8765</p>
+  </div>
+  <div class="toolbar">
+    <button class="fr-btn" id="frBtn" onclick="toggleFR()">强制刷新: 关</button>
   </div>
   <div class="cards">
     <a class="card c-blue" href="breadth_chart.html">
@@ -53,7 +61,25 @@ body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; backgro
       <div class="desc">首板涨停 + 龙虎榜参与方</div>
     </a>
   </div>
-  <div class="footer">daily_update 跑完后刷新即可看到最新数据</div>
+  <div class="footer">daily_update 跑完后刷新即可看到最新数据 &middot; 开启强制刷新后点击卡片绕过缓存</div>
 </div>
+<script>
+var frOn = false;
+function toggleFR() {
+    frOn = !frOn;
+    var btn = document.getElementById('frBtn');
+    btn.textContent = '强制刷新: ' + (frOn ? '开' : '关');
+    btn.className = 'fr-btn' + (frOn ? ' on' : '');
+}
+document.querySelectorAll('.card').forEach(function(card) {
+    card.addEventListener('click', function(e) {
+        if (frOn) {
+            e.preventDefault();
+            var href = card.getAttribute('href').split('?')[0];
+            window.location.href = href + '?t=' + Date.now();
+        }
+    });
+});
+</script>
 </body>
 </html>
