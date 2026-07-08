@@ -157,9 +157,8 @@ function loadBasicScoresV2() {
         return Promise.resolve();
     }
     // 未加载, 直接fetch评分数据(不重新渲染表格)
-    var dt = new Date();
-    var SCORE_VERSION = 'v2_' + dt.getFullYear() + ('0'+(dt.getMonth()+1)).slice(-2) + ('0'+dt.getDate()).slice(-2);
-    return fetch(CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION)
+    var vParam = DATA_VERSION || ('v2_' + new Date().toISOString().slice(0,10).replace(/-/g,''));
+    return fetch(CDN_BASE + 'stock_basic_scores_v2.json?v=' + vParam)
         .then(function(r) { return r.json(); })
         .then(function(d) {
             basicScoresV2 = d.scores || {};
@@ -361,10 +360,51 @@ var CDN_BASE = getBaseUrl();
 var PY_VERSION = '20260703';
 var POOL_VERSION = '20260703';
 
+// === Cache-busting: 从trading_days.json获取数据版本号 ===
+var DATA_VERSION = '';
+var DATA_DATE = '';
+
+// 时间窗口轮询: 16:05~22:00, 60秒间隔, trading_days.json的updated变了就自动刷新
+var pollTimer = null;
+function startPolling() {
+    var now = new Date();
+    var curMin = now.getHours() * 60 + now.getMinutes();
+    var startMin = 16 * 60 + 5;  // 16:05
+    var endMin = 22 * 60;         // 22:00
+    
+    if (curMin >= endMin) {
+        console.log('Polling: past 22:00, skip');
+        return;
+    }
+    if (curMin < startMin) {
+        var delayMs = (startMin - curMin) * 60 * 1000;
+        console.log('Polling: wait ' + Math.round(delayMs / 60000) + ' min until 16:05');
+        setTimeout(startPolling, delayMs);
+        return;
+    }
+    console.log('Polling: started (60s, until 22:00)');
+    pollTimer = setInterval(function() {
+        var n = new Date();
+        if (n.getHours() * 60 + n.getMinutes() >= 22 * 60) {
+            clearInterval(pollTimer);
+            console.log('Polling: stopped at 22:00');
+            return;
+        }
+        fetch(getBaseUrl() + 'trading_days.json?t=' + Date.now())
+            .then(function(r) { return r.json(); })
+            .then(function(td) {
+                if (td.updated && td.updated !== DATA_DATE) {
+                    location.reload();
+                }
+            })
+            .catch(function(e) {});
+    }, 60000);
+}
+startPolling();
+
 function loadData() {
     // === Plan B: trading_days.json + stock_basic_scores_history.json ===
-    var tdUrl = CDN_BASE + 'trading_days.json';
-    var histUrl = CDN_BASE + 'stock_basic_scores_history.json';
+    var tdUrl = CDN_BASE + 'trading_days.json?t=' + Date.now();
     var poolUrl = CDN_BASE + 'stock_pool.json?v=' + POOL_VERSION;
     var pinyinUrl = getBaseUrl() + 'pinyin_initials.json?v=' + PY_VERSION;
 
@@ -393,6 +433,12 @@ function loadData() {
         var poolData = r1[1];
         var pinyinData = r1[2] || {};
 
+        // 设置 DATA_VERSION (用于后续数据文件的cache-busting)
+        if (td && td.updated) {
+            DATA_DATE = td.updated;
+            DATA_VERSION = 'V1.0_' + td.updated.replace(/-/g, '') + '_' + Math.floor(Math.random() * 100);
+        }
+
         // 填充 nameMap
         if (poolData) {
             for (var i = 0; i < poolData.length; i++) {
@@ -410,6 +456,7 @@ function loadData() {
         }
 
         // Step 4: 加载 history.json → 取这两个交易日的分数
+        var histUrl = CDN_BASE + 'stock_basic_scores_history.json?v=' + DATA_VERSION;
         fetch(histUrl).then(function(r) {
             if (!r.ok) return null;
             return r.json();
@@ -451,9 +498,8 @@ function loadData() {
 
             // === Fallback: history 不完整, 用 v2.json + v2_prev.json ===
             console.warn('History incomplete, fallback to v2+prev');
-            var SCORE_VERSION = 'v2_' + (latestDay || '20260630').replace(/-/g, '');
-            var scoreUrl = CDN_BASE + 'stock_basic_scores_v2.json?v=' + SCORE_VERSION;
-            var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json';
+            var scoreUrl = CDN_BASE + 'stock_basic_scores_v2.json?v=' + DATA_VERSION;
+            var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json?v=' + DATA_VERSION;
 
             Promise.all([
                 fetch(scoreUrl).then(function(r) { return r.json(); }),
@@ -488,7 +534,7 @@ function loadData() {
 }
 
 function loadPrevScores(callback) {
-    var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json';
+    var prevUrl = CDN_BASE + 'stock_basic_scores_v2_prev.json?v=' + DATA_VERSION;
     fetch(prevUrl).then(function(r) {
         if (!r.ok) { if (callback) callback(); return; }
         return r.json();

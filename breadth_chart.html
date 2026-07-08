@@ -192,6 +192,57 @@ var CDN_BASE = getBaseUrl();
 var PY_VERSION = '20260703';
 var POOL_VERSION = '20260703';
 
+// === Cache-busting: 从trading_days.json获取数据版本号 ===
+// DATA_VERSION 格式: V1.0_20260708_37 (版本_日期_随机2位)
+// DATA_DATE: trading_days.json的updated字段, 用于60秒轮询比较
+var DATA_VERSION = '';
+var DATA_DATE = '';
+var dataReady = fetch(getBaseUrl() + 'trading_days.json?t=' + Date.now())
+    .then(function(r) { return r.json(); })
+    .then(function(td) {
+        DATA_DATE = td.updated || '';
+        DATA_VERSION = 'V1.0_' + DATA_DATE.replace(/-/g, '') + '_' + Math.floor(Math.random() * 100);
+    })
+    .catch(function(e) { console.warn('trading_days.json load failed', e); });
+
+// 时间窗口轮询: 16:05~22:00, 60秒间隔, trading_days.json的updated变了就自动刷新
+var pollTimer = null;
+function startPolling() {
+    var now = new Date();
+    var curMin = now.getHours() * 60 + now.getMinutes();
+    var startMin = 16 * 60 + 5;  // 16:05
+    var endMin = 22 * 60;         // 22:00
+    
+    if (curMin >= endMin) {
+        console.log('Polling: past 22:00, skip');
+        return;
+    }
+    if (curMin < startMin) {
+        var delayMs = (startMin - curMin) * 60 * 1000;
+        console.log('Polling: wait ' + Math.round(delayMs / 60000) + ' min until 16:05');
+        setTimeout(startPolling, delayMs);
+        return;
+    }
+    console.log('Polling: started (60s, until 22:00)');
+    pollTimer = setInterval(function() {
+        var n = new Date();
+        if (n.getHours() * 60 + n.getMinutes() >= 22 * 60) {
+            clearInterval(pollTimer);
+            console.log('Polling: stopped at 22:00');
+            return;
+        }
+        fetch(getBaseUrl() + 'trading_days.json?t=' + Date.now())
+            .then(function(r) { return r.json(); })
+            .then(function(td) {
+                if (td.updated && td.updated !== DATA_DATE) {
+                    location.reload();
+                }
+            })
+            .catch(function(e) {});
+    }, 60000);
+}
+startPolling();
+
 function loadPinyinMap() {
     if (pinyinLoaded) return;
     fetch(getBaseUrl() + 'pinyin_initials.json?v=' + PY_VERSION).then(function(r) { return r.json(); }).then(function(d) {
@@ -203,7 +254,7 @@ function loadPinyinMap() {
         }
     }).catch(function(e) { console.warn('pinyin map load failed', e); });
 }
-loadPinyinMap();
+dataReady.then(loadPinyinMap);
 
 function onSearchInput() {
     updateWatchlistBtn();
@@ -380,7 +431,8 @@ function buildOption(priceData, openPriceData) {
 window.addEventListener('resize', function() { chart.resize(); });
 
 // === V004: 优先加载chart_data.json (7.5KB, 秒开) ===
-fetch('chart_data.json').then(function(r) { return r.json(); }).then(function(d) {
+dataReady.then(function() {
+return fetch('chart_data.json?v=' + DATA_VERSION).then(function(r) { return r.json(); }).then(function(d) {
     xLabels = d.xLabels;
     advData = d.advData;
     markAreaPairs = d.markAreaPairs;
@@ -393,6 +445,7 @@ fetch('chart_data.json').then(function(r) { return r.json(); }).then(function(d)
     showBasicScoreV2('600519');
     renderWatchlist();
 }).catch(function(e) { console.error('chart_data.json load failed', e); });
+});
 
 // === V004: 观察池优先加载策略 ===
 // 加载顺序: chart_data.json(7.5KB秒开) → 开盘价(241KB) → 观察池个股(每只2-3KB) → 按需加载其他
@@ -401,7 +454,7 @@ var pendingStockCode = '';
 // V004: 按需加载单只股票K线 (从stocks/{code}.json, 含name+prices)
 function loadSingleStock(code) {
     if (allStockData[code]) return Promise.resolve(allStockData[code]);
-    return fetch(CDN_BASE + 'stocks/' + code + '.json').then(function(r) {
+    return fetch(CDN_BASE + 'stocks/' + code + '.json?v=' + DATA_VERSION).then(function(r) {
         if (!r.ok) return null;
         return r.json();
     }).then(function(d) {
@@ -444,7 +497,8 @@ function loadStockData() {
 }
 
 // V004: 先加载开盘价(241KB), 再优先加载观察池个股
-fetch(CDN_BASE + 'breadth_open_prices.json').then(function(r) { return r.json(); }).then(function(d) {
+dataReady.then(function() {
+return fetch(CDN_BASE + 'breadth_open_prices.json?v=' + DATA_VERSION).then(function(r) { return r.json(); }).then(function(d) {
     allOpenPriceData = d;
     var code = document.getElementById('stockCode').value.trim();
     if (code && allStockData[code]) renderStockChart(code);
@@ -455,6 +509,7 @@ fetch(CDN_BASE + 'breadth_open_prices.json').then(function(r) { return r.json();
     console.warn('open prices load failed', e);
     loadStockData();
     loadWatchlistStocks();
+});
 });
 
 // --- 个股查看 ---
@@ -707,7 +762,7 @@ function syncFollowList() {
 function loadBasicScoresV2() {
     if (basicScoresV2Loaded) return Promise.resolve();
     if (basicScoresV2Loading) return basicScoresV2Loading;
-    basicScoresV2Loading = fetch(CDN_BASE + 'stock_basic_scores_v2.json').then(function(r) { return r.json(); }).then(function(d) {
+    basicScoresV2Loading = fetch(CDN_BASE + 'stock_basic_scores_v2.json?v=' + DATA_VERSION).then(function(r) { return r.json(); }).then(function(d) {
         basicScoresV2 = d.scores;
         basicScoresV2Loaded = true;
         basicScoresV2Loading = null;

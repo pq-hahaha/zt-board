@@ -189,21 +189,76 @@ function getCdnBase() {
 var PAGES_BASE = getBaseUrl();
 var CDN_BASE = getCdnBase();
 
+// === Cache-busting: 从trading_days.json获取数据版本号 ===
+var DATA_VERSION = '';
+var DATA_DATE = '';
+
+// 时间窗口轮询: 16:05~22:00, 60秒间隔, trading_days.json的updated变了就自动刷新
+var pollTimer = null;
+function startPolling() {
+    var now = new Date();
+    var curMin = now.getHours() * 60 + now.getMinutes();
+    var startMin = 16 * 60 + 5;  // 16:05
+    var endMin = 22 * 60;         // 22:00
+    
+    if (curMin >= endMin) {
+        console.log('Polling: past 22:00, skip');
+        return;
+    }
+    if (curMin < startMin) {
+        var delayMs = (startMin - curMin) * 60 * 1000;
+        console.log('Polling: wait ' + Math.round(delayMs / 60000) + ' min until 16:05');
+        setTimeout(startPolling, delayMs);
+        return;
+    }
+    console.log('Polling: started (60s, until 22:00)');
+    pollTimer = setInterval(function() {
+        var n = new Date();
+        if (n.getHours() * 60 + n.getMinutes() >= 22 * 60) {
+            clearInterval(pollTimer);
+            console.log('Polling: stopped at 22:00');
+            return;
+        }
+        fetch(CDN_BASE + 'trading_days.json?t=' + Date.now())
+            .then(function(r) { return r.json(); })
+            .then(function(td) {
+                if (td.updated && td.updated !== DATA_DATE) {
+                    location.reload();
+                }
+            })
+            .catch(function(e) {});
+    }, 60000);
+}
+startPolling();
+
 // === 数据加载 ===
 function loadData() {
-    var tdUrl = CDN_BASE + 'trading_days.json';
-    var emotionUrl = PAGES_BASE + 'emotion_scores.json';
-    var prevUrl = PAGES_BASE + 'emotion_scores_prev.json';
+    var tdUrl = CDN_BASE + 'trading_days.json?t=' + Date.now();
 
-    var tdPromise = fetch(tdUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
-    var emotionPromise = fetch(emotionUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
-    var prevPromise = fetch(prevUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+    // Step 1: 先拿trading_days.json, 设置DATA_VERSION
+    fetch(tdUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+    .then(function(td) {
+        // 设置 DATA_VERSION
+        if (td && td.updated) {
+            DATA_DATE = td.updated;
+            DATA_VERSION = 'V1.0_' + td.updated.replace(/-/g, '') + '_' + Math.floor(Math.random() * 100);
+        }
 
-    Promise.all([tdPromise, emotionPromise, prevPromise])
-    .then(function(results) {
-        var td = results[0];
-        var emotionData = results[1];
-        var prevData = results[2];
+        // Step 2: 用DATA_VERSION拉数据文件
+        var emotionUrl = PAGES_BASE + 'emotion_scores.json?v=' + DATA_VERSION;
+        var prevUrl = PAGES_BASE + 'emotion_scores_prev.json?v=' + DATA_VERSION;
+
+        var emotionPromise = fetch(emotionUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+        var prevPromise = fetch(prevUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+
+        return Promise.all([emotionPromise, prevPromise]).then(function(results) {
+            return {td: td, emotionData: results[0], prevData: results[1]};
+        });
+    })
+    .then(function(data) {
+        var td = data.td;
+        var emotionData = data.emotionData;
+        var prevData = data.prevData;
 
         if (!emotionData || !emotionData.scores) {
             document.getElementById('rankBody').innerHTML =
