@@ -1,11 +1,11 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260703.002-guananchituozhuapaixu-cdnbusting
-  上线日期: 2026-06-29
-  基于版本: V20260629.001 (cea92a0)
+  版本序列号: V20260713.001-tupushitian
+  上线日期: 2026-07-13
+  基于版本: V20260703.002-guananchituozhuapaixu-cdnbusting
   功能清单:
-    1. 个股5分钟K线(7交易日×48根)
+    1. 个股5分钟K线(10交易日×48根=480点, 默认显示7天可拉到10天)
     2. 涨跌家数双Y轴(15分钟粒度,4时段底色)
     3. markPoint: 金色点=9:30开盘价, 橙色点=9:35收盘价, 红色点=15:00收盘价
     4. 观察池(zt_watchlist): 添加/删除/管理/批量删除
@@ -18,32 +18,39 @@
     11. 同步按钮颜色(tongbuyscys): 同步观察池按钮改为绿色(与入观察池一致)
     === V004 新增 ===
     12. 动态同步(dongtaitongbu): 图谱数据从chart_data.json动态加载, 不再硬编码5组数组
-        - chart_data.json含date锚点(最新交易日)+target_dates(7天)+advData/markArea/xLabels/dateLabels/defaultPriceData
+        - chart_data.json含date锚点(最新交易日)+target_dates(10天)+advData/markArea/xLabels/dateLabels/defaultPriceData
         - 每日daily_update.py自动重新生成, HTML无需手动patch
     13. CDN切换(cdnqiehuan): 数据文件从jsDelivr(德国FRA节点)切换到GitHub Pages(东京NRT节点)
         - jsDelivr国内拉9.5MB仅13KB/s, GitHub Pages东京节点更快
     14. 观察池优先(guananchiyouxian): 加载顺序优化
-        - chart_data.json(7.5KB秒开) → breadth_open_prices.json(241KB) → 后台全量breadth_stock_data.json(9.5MB)
-        - 首屏不依赖9.5MB, 图谱+默认股+金色点秒开, 全量后台非阻塞
+        - chart_data.json(7.5KB秒开) → breadth_open_prices.json(241KB) → stocks/{code}.json按需加载
+        - 首屏不依赖全量, 图谱+默认股+金色点秒开
     === V004.002 新增 ===
     15. K线数据拆分(kxianshujuchaisu): breadth_stock_data.json(9.5MB)拆成stocks/{code}.json(每只2KB)
         - 4991只股票各一个文件, 总8MB分散存储
         - 观察池个股按需fetch stocks/{code}.json, 10只=20KB秒开
         - 输入代码切换单只加载2KB, 不再等9.5MB全量
-        - breadth_stock_data.json保留作兼容备份, 实际不再使用
+        - breadth_stock_data.json已废弃删除, 前端不再加载
+    === V20260713 新增 ===
+    16. 图谱十天(tupushitian): 图谱从7日扩展到10日
+        - gen_breadth.py DAYS_PER_WINDOW 7→10, 产出480点(10天×48)
+        - HTML 6处常量: dayBoundaries/dayLineIndices/hourLineIndices/OPEN_INDICES/expandOpenPrices/dataZoom
+        - dataZoom start:30 默认显示7天(336/480=70%), 可拉到10天
+        - 三种markPoint(金色/橙色/红色)遍历dayBoundaries自动适配, 无需改逻辑
+        - 情绪/V2评分的7天窗口是算法设计, 不随图谱显示天数变
   数据加载:
-    - chart_data.json (7.5KB) → GitHub Pages [V004新增, 图谱核心数据+默认股]
-    - stocks/{code}.json (2KB/只) → GitHub Pages [V004.002新增, 按需加载单只K线]
-    - breadth_stock_data.json (9.5MB) → 兼容备份, 实际不再使用
-    - breadth_open_prices.json (241KB稀疏) → GitHub Pages
+    - chart_data.json (7.5KB) → GitHub Pages [V004新增, 图谱核心数据+默认股, 480点]
+    - stocks/{code}.json (2KB/只) → GitHub Pages [V004.002新增, 按需加载单只K线, 480点]
+    - breadth_open_prices.json (241KB稀疏) → GitHub Pages [10值/股, 停牌=None占位]
     - stock_basic_scores_v2.json (382KB) → GitHub Pages
     - pinyin_initials.json (79KB) → GitHub Pages
   版本历史:
-    V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian [上一版, 9.5MB全量加载]
+    V20260703.002-guananchituozhuapaixu-cdnbusting [上一版]
+    V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian [9.5MB全量加载]
     V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys [更早稳定版]
     V20260628.001-jiazaichengsedian-cdnjiasu [已废弃 - 金色点位置bug]
     V20260627.001 (f86b073) [稳定基线]
-  上线前备份: bf1a8a2 (V20260628.003)
+  上线前备份: breadth_chart.html.bak_V20260703.002
 ============================================
 -->
 <!DOCTYPE html>
@@ -147,14 +154,14 @@ var advData = [];
 var markAreaPairs = [];
 var dateLabels = [];
 var currentPriceData = [];
-var dayBoundaries = [0, 48, 96, 144, 192, 240, 288];
-var dayLineIndices = [48, 96, 144, 192, 240, 288];
-var hourLineIndices = [12, 24, 36, 60, 72, 84, 108, 120, 132, 156, 168, 180, 204, 216, 228, 252, 264, 276, 300, 312, 324];
+var dayBoundaries = [0, 48, 96, 144, 192, 240, 288, 336, 384, 432];
+var dayLineIndices = [48, 96, 144, 192, 240, 288, 336, 384, 432];
+var hourLineIndices = [12, 24, 36, 60, 72, 84, 108, 120, 132, 156, 168, 180, 204, 216, 228, 252, 264, 276, 300, 312, 324, 348, 360, 372, 396, 408, 420, 444, 456, 468];
 
 // === 全局状态 ===
 var allStockData = {};          // 个股价格数据(从完整JSON加载)
 var allOpenPriceData = {};      // 开盘价数据(稀疏格式, 从JSON加载)
-var currentOpenPriceData = [];  // 当前股票的开盘价(还原后336值数组)
+var currentOpenPriceData = [];  // 当前股票的开盘价(还原后480值数组)
 var stockNames = {};            // 股票名称(从索引加载)
 var fullDataLoaded = false;     // 完整数据是否已加载
 var basicScoresV2 = {};         // V2评分数据
@@ -162,11 +169,11 @@ var basicScoresV2Loaded = false;
 var basicScoresV2Loading = null;
 
 // === 开盘价稀疏还原 ===
-// JSON里每只股票只存7个有效值(每天1个), 需还原到336值数组
-var OPEN_INDICES = [0, 48, 96, 144, 192, 240, 288];
+// JSON里每只股票只存10个有效值(每天1个), 需还原到480值数组
+var OPEN_INDICES = [0, 48, 96, 144, 192, 240, 288, 336, 384, 432];
 function expandOpenPrices(sparseArr) {
     if (!sparseArr) return [];
-    var full = new Array(336).fill(null);
+    var full = new Array(480).fill(null);
     for (var i = 0; i < sparseArr.length && i < OPEN_INDICES.length; i++) {
         full[OPEN_INDICES[i]] = sparseArr[i];
     }
@@ -404,8 +411,8 @@ function buildOption(priceData, openPriceData) {
             { type: 'value', name: '上涨家数', nameTextStyle: {color: '#2980b9', fontSize: 11}, position: 'right', min: 0, max: 5000, axisLine: {lineStyle: {color: '#2980b9'}}, axisLabel: {color: '#2980b9', fontSize: 11}, splitLine: {show: false} }
         ],
         dataZoom: [
-            {type: 'inside', start: 0, end: 100},
-            { type: 'slider', start: 0, end: 100, height: 18, bottom: 8, backgroundColor: '#f0f0f0', borderColor: '#ddd', fillerColor: 'rgba(100,100,150,0.15)', handleStyle: {color: '#999'}, textStyle: {color: '#888'} }
+            {type: 'inside', start: 30, end: 100},
+            { type: 'slider', start: 30, end: 100, height: 18, bottom: 8, backgroundColor: '#f0f0f0', borderColor: '#ddd', fillerColor: 'rgba(100,100,150,0.15)', handleStyle: {color: '#999'}, textStyle: {color: '#888'} }
         ],
         series: [
             {
