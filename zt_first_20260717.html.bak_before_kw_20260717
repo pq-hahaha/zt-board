@@ -1,0 +1,137 @@
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>首板分析Dashboard - 20260717</title><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif; background:#f5f6fa; color:#333; line-height:1.6; }
+  .header { background:linear-gradient(135deg,#1a3c7a 0%,#2E75B5 50%,#375623 100%); color:#fff; padding:28px 40px 24px; border-radius:0 0 20px 20px; margin-bottom:24px; box-shadow:0 4px 20px rgba(26,60,122,0.3); }
+  .header h1 { font-size:26px; font-weight:700; letter-spacing:2px; margin-bottom:4px; }
+  .header .sub { font-size:13px; opacity:0.85; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .date-nav { display:inline-flex; align-items:center; gap:8px; }
+  .date-arrow { background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:6px; width:28px; height:28px; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; line-height:1; }
+  .date-arrow:hover { background:rgba(255,255,255,0.35); }
+  .date-arrow.disabled { opacity:0.3; cursor:not-allowed; }
+  .date-label { font-size:14px; font-weight:600; color:#fff; min-width:80px; text-align:center; }
+  .mv-toggle { display:inline-flex; background:rgba(255,255,255,0.15); border-radius:10px; padding:3px; gap:2px; }
+  .mv-btn { background:transparent; border:none; color:rgba(255,255,255,0.7); padding:5px 16px; border-radius:8px; font-size:13px; cursor:pointer; transition:all 0.25s; font-family:inherit; }
+  .mv-btn.active { background:rgba(255,255,255,0.9); color:#1a3c7a; font-weight:700; }
+  .mv-btn:hover:not(.active) { background:rgba(255,255,255,0.2); color:#fff; }
+  .container { max-width:1440px; margin:0 auto; padding:0 24px 40px; }
+  .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+  .scard { background:#fff; border-radius:14px; padding:20px 18px; box-shadow:0 2px 12px rgba(0,0,0,0.06); transition:transform 0.2s,box-shadow 0.2s; }
+  .scard:hover { transform:translateY(-3px); box-shadow:0 6px 24px rgba(0,0,0,0.12); }
+  .scard .lbl { font-size:12px; color:#888; margin-bottom:6px; }
+  .scard .val { font-size:28px; font-weight:700; }
+  .c-blue { color:#2E75B5; }
+  .c-green { color:#375623; }
+  .c-orange { color:#CC6600; }
+  .c-red { color:#C00000; }
+  .panel { background:#fff; border-radius:14px; padding:24px; margin-bottom:24px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
+  .panel h2 { font-size:15px; color:#c0392b; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #f5f6fa; }
+  .dist-row { display:flex; align-items:center; margin-bottom:8px; }
+  .dist-lbl { width:60px; font-size:11px; color:#666; text-align:right; padding-right:10px; }
+  .dist-bg { flex:1; height:18px; background:#f0f2f5; border-radius:9px; overflow:hidden; }
+  .dist-bar { height:100%; border-radius:9px; transition:width 0.4s ease; }
+  .dist-cnt { width:40px; font-size:12px; font-weight:600; text-align:right; padding-left:8px; }
+  .tbl-wrap { overflow-x:auto; border-radius:10px; border:1px solid #eee; }
+  table { width:100%; border-collapse:collapse; font-size:14px; table-layout:fixed; }
+  thead th { background:#e74c3c; color:#fff; padding:10px 6px; font-weight:600; white-space:normal; word-break:keep-all; position:sticky; top:0; line-height:1.3; }
+  thead th:hover { background:#c0392b; }
+  tbody td { padding:7px 6px; border-bottom:1px solid #f0f0f0; white-space:nowrap; text-align:center; overflow:hidden; text-overflow:ellipsis; }
+  tbody tr:hover { background:#fef5f5; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .prog-bg { width:70px; height:8px; background:#eee; border-radius:4px; display:inline-block; vertical-align:middle; margin-left:4px; }
+  .prog-bar { display:block; height:100%; border-radius:4px; }
+  .rank-badge { display:inline-flex; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; font-weight:bold; font-size:11px; }
+  .footer { text-align:center; font-size:12px; color:#aaa; padding:20px; }
+  /* 密码锁 */
+  .lock-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#1a3c7a 0%,#2E75B5 50%,#375623 100%); z-index:9999; display:flex; justify-content:center; align-items:center; }
+  .lock-box { background:#fff; border-radius:16px; padding:40px 48px; box-shadow:0 8px 40px rgba(0,0,0,0.3); text-align:center; max-width:380px; }
+  .lock-box h2 { font-size:22px; color:#1a3c7a; margin-bottom:8px; }
+  .lock-box p { font-size:13px; color:#888; margin-bottom:24px; }
+  .lock-input { width:100%; padding:12px 16px; border:2px solid #ddd; border-radius:10px; font-size:16px; text-align:center; outline:none; transition:border-color 0.3s; }
+  .lock-input:focus { border-color:#2E75B5; }
+  .lock-btn { width:100%; padding:12px; background:linear-gradient(135deg,#1a3c7a,#2E75B5); color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; margin-top:16px; transition:opacity 0.3s; }
+  .lock-btn:hover { opacity:0.85; }
+  .lock-err { color:#C00000; font-size:13px; margin-top:12px; display:none; }
+</style></head><body><div class="lock-overlay" id="lockOverlay"><div class="lock-box"><h2>首板分析报告</h2><p>请输入密码查看内容</p><input type="password" class="lock-input" id="lockInput" placeholder="输入密码" autocomplete="off"><button class="lock-btn" id="lockBtn">查看报告</button><div class="lock-err" id="lockErr">密码错误，请重新输入</div></div></div><script>async function sha256(str){const buf=new TextEncoder().encode(str);const hash=await crypto.subtle.digest("SHA-256",buf);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");}document.getElementById("lockBtn").onclick=async function(){var pwd=document.getElementById("lockInput").value;var hash=await sha256(pwd);if(hash==="805503e693c40ae7a50d9d574345f68cd8bca12b97f9f20f74f26c1575662c14"){document.getElementById("lockOverlay").style.display="none";localStorage.setItem("zt_auth","ok")}else{document.getElementById("lockErr").style.display="block";document.getElementById("lockInput").value="";document.getElementById("lockInput").focus()}};document.getElementById("lockInput").onkeydown=function(e){if(e.key==="Enter")document.getElementById("lockBtn").click()};if(localStorage.getItem("zt_auth")==="ok"){document.getElementById("lockOverlay").style.display="none";}</script><div class="header"><h1>首板涨停分析 Dashboard</h1><div class="sub"><div class="date-nav"><button class="date-arrow" id="date-prev" onclick="dateNav(-1)">&#9664;</button><span class="date-label" id="date-label">20260717</span><button class="date-arrow" id="date-next" onclick="dateNav(1)">&#9654;</button></div><script>var DATES=["20260618","20260622","20260623","20260624","20260625","20260626","20260629","20260630","20260701","20260702","20260703","20260706","20260707","20260708","20260709","20260710","20260713","20260714","20260715","20260716","20260717"];var CUR="20260717";function dateNav(dir){var i=DATES.indexOf(CUR);if(i<0)i=DATES.length-1;var n=i+dir;if(n<0||n>=DATES.length)return;CUR=DATES[n];document.getElementById("date-label").textContent=CUR;document.getElementById("date-prev").classList.toggle("disabled",n===0);document.getElementById("date-next").classList.toggle("disabled",n===DATES.length-1);if(CUR===DATES[DATES.length-1]){window.location.href="index.html?v="+CUR;}else{window.location.href="zt_first_"+CUR+".html?v="+CUR;}}document.getElementById("date-prev").classList.toggle("disabled",DATES.indexOf(CUR)===0);document.getElementById("date-next").classList.toggle("disabled",DATES.indexOf(CUR)===DATES.length-1);</script><div class="mv-toggle"><button class="mv-btn active" id="btn-all" onclick="switchView('all')">全部首板</button><button class="mv-btn" id="btn-mv" onclick="toggleFilter('mv')">市值50-800亿</button><button class="mv-btn" id="btn-amount" onclick="toggleFilter('amount')">成交额1.5-35亿</button></div><span>生成于 WorkBuddy</span></div></div><div class="container"><script>var VIEW_DATA = {all: {"stats": {"total": 24, "lh": 0}}, mv: {"stats": {"total": 16, "lh": 0}}, amount: {"stats": {"total": 20, "lh": 0}}, mv_amount: {"stats": {"total": 15, "lh": 0}}};var mvFilter = false;var amountFilter = false;</script><div class="stats-grid"><div class="scard"><div class="lbl">首板股票数</div><div class="val c-blue" id="stat-total">0</div></div><div class="scard"><div class="lbl">龙虎榜上榜</div><div class="val c-red" id="stat-lh">0</div></div></div><div class="panel"><h2 id="main-table-title">全部首板股票（按历史得分排序）</h2><div class="tbl-wrap"><table><colgroup><col style="width:7%"><col style="width:8%"><col style="width:7%"><col style="width:6%"><col style="width:10%"><col style="width:10%"><col style="width:5%"><col style="width:47%"></colgroup><thead><tr><th>代码</th><th>名称</th><th>市值(亿)</th><th>历史</th><th>封单额<br>成交量</th><th>龙虎榜<br>参与方</th><th>炸板</th><th>涨停原因</th></tr></thead><tbody><tr data-mv="34.1" data-in-range="false" data-amount="1.14" data-amount-in-range="false"><td style="color:#2E75B5;font-weight:700;">003001</td><td style="color:#2E75B5;font-weight:700;">中岩大地</td><td style="font-size:13px;color:#aaa;">34.1</td><td style="color:#CC6600;font-weight:700;">55.4</td><td>74%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title="岩土固化剂+水电站岩土工程+核电+环境修复">岩土固化剂+水电站岩土工程+核电+环境修复</td></tr><tr data-mv="28.7" data-in-range="false" data-amount="3.06" data-amount-in-range="true"><td style="color:#2E75B5;font-weight:700;">600992</td><td style="color:#2E75B5;font-weight:700;">贵绳股份</td><td style="font-size:13px;color:#aaa;">28.7</td><td style="color:#CC6600;font-weight:700;">53.0</td><td>5%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title="商业航天+军工+习酒猜想+钢丝绳">商业航天+军工+习酒猜想+钢丝绳</td></tr><tr data-mv="73.9" data-in-range="true" data-amount="2.61" data-amount-in-range="true"><td style="color:#2E75B5;font-weight:700;">605011</td><td style="color:#2E75B5;font-weight:700;">杭州热电</td><td style="font-size:13px;color:#375623;">73.9</td><td style="color:#CC6600;font-weight:700;">51.9</td><td>9%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="56.9" data-in-range="true" data-amount="11.87" data-amount-in-range="true"><td style="color:#2E75B5;font-weight:700;">000779</td><td style="color:#2E75B5;font-weight:700;">甘咨询</td><td style="font-size:13px;color:#375623;">56.9</td><td style="color:#CC6600;font-weight:700;">50.1</td><td>0%</td><td style="text-align:center;">—</td><td>9</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="60.1" data-in-range="true" data-amount="5.51" data-amount-in-range="true"><td style="">600881</td><td style="">亚泰集团</td><td style="font-size:13px;color:#375623;">60.1</td><td style="color:#CC6600;font-weight:700;">49.7</td><td>5%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title="中药+创新药+资产出售+建材">中药+创新药+资产出售+建材</td></tr><tr data-mv="837.1" data-in-range="false" data-amount="3.88" data-amount-in-range="true"><td style="">600236</td><td style="">桂冠电力</td><td style="font-size:13px;color:#aaa;">837.1</td><td style="color:#CC6600;font-weight:700;">49.6</td><td>15%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="248.5" data-in-range="true" data-amount="9.80" data-amount-in-range="true"><td style="">600095</td><td style="">湘财股份</td><td style="font-size:13px;color:#375623;">248.5</td><td style="color:#CC6600;font-weight:700;">48.7</td><td>5%</td><td style="text-align:center;">—</td><td>3</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="79.0" data-in-range="true" data-amount="7.30" data-amount-in-range="true"><td style="">000722</td><td style="">湖南发展</td><td style="font-size:13px;color:#375623;">79.0</td><td style="color:#CC6600;font-weight:700;">47.1</td><td>5%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title="中报预增+水电并购+绿色电力+湖南国资">中报预增+水电并购+绿色电力+湖南国资</td></tr><tr data-mv="39.1" data-in-range="false" data-amount="4.57" data-amount-in-range="true"><td style="">001388</td><td style="">信通电子</td><td style="font-size:13px;color:#aaa;">39.1</td><td style="color:#CC6600;font-weight:700;">44.5</td><td>4%</td><td style="text-align:center;">—</td><td>7</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title="高送转+机器人+电力智能化改造">高送转+机器人+电力智能化改造</td></tr><tr data-mv="117.7" data-in-range="true" data-amount="17.84" data-amount-in-range="true"><td style="">603118</td><td style="">共进股份</td><td style="font-size:13px;color:#375623;">117.7</td><td style="color:#CC6600;font-weight:700;">44.5</td><td>4%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="369.0" data-in-range="true" data-amount="35.94" data-amount-in-range="false"><td style="">002432</td><td style="">九安医疗</td><td style="font-size:13px;color:#375623;">369.0</td><td style="color:#CC6600;font-weight:700;">44.4</td><td>11%</td><td style="text-align:center;">—</td><td>2</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title="中报预增+投资大模型+月之暗面+医疗器械">中报预增+投资大模型+月之暗面+医疗器械</td></tr><tr data-mv="163.7" data-in-range="true" data-amount="3.16" data-amount-in-range="true"><td style="">601369</td><td style="">陕鼓动力</td><td style="font-size:13px;color:#375623;">163.7</td><td style="color:#CC6600;font-weight:700;">44.3</td><td>11%</td><td style="text-align:center;">—</td><td>2</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="55.5" data-in-range="true" data-amount="3.27" data-amount-in-range="true"><td style="">000037</td><td style="">深南电A</td><td style="font-size:13px;color:#375623;">55.5</td><td style="color:#CC6600;font-weight:700;">44.3</td><td>10%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="51.7" data-in-range="true" data-amount="7.53" data-amount-in-range="true"><td style="">600227</td><td style="">赤天化</td><td style="font-size:13px;color:#375623;">51.7</td><td style="color:#CC6600;font-weight:700;">44.3</td><td>4%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title="中报预增+尿素+氮肥+甲醇+化肥+阿尔茨海默">中报预增+尿素+氮肥+甲醇+化肥+阿尔茨海默</td></tr><tr data-mv="56.9" data-in-range="true" data-amount="4.64" data-amount-in-range="true"><td style="">600982</td><td style="">宁波能源</td><td style="font-size:13px;color:#375623;">56.9</td><td style="color:#CC6600;font-weight:700;">43.9</td><td>13%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="31.3" data-in-range="false" data-amount="1.68" data-amount-in-range="true"><td style="">300795</td><td style="">米奥会展</td><td style="font-size:13px;color:#aaa;">31.3</td><td style="color:#CC6600;font-weight:700;">43.8</td><td>40%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="148.5" data-in-range="true" data-amount="2.69" data-amount-in-range="true"><td style="">001369</td><td style="">双欣材料</td><td style="font-size:13px;color:#375623;">148.5</td><td style="color:#CC6600;font-weight:700;">43.8</td><td>10%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="52.1" data-in-range="true" data-amount="3.88" data-amount-in-range="true"><td style="">600644</td><td style="">乐山电力</td><td style="font-size:13px;color:#375623;">52.1</td><td style="color:#CC6600;font-weight:700;">42.3</td><td>16%</td><td style="text-align:center;">—</td><td>1</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="104.4" data-in-range="true" data-amount="3.97" data-amount-in-range="true"><td style="">000899</td><td style="">赣能股份</td><td style="font-size:13px;color:#375623;">104.4</td><td style="color:#CC6600;font-weight:700;">41.7</td><td>19%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="33.9" data-in-range="false" data-amount="1.17" data-amount-in-range="false"><td style="">002766</td><td style="">索菱股份</td><td style="font-size:13px;color:#aaa;">33.9</td><td style="color:#CC6600;font-weight:700;">41.3</td><td>29%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="48.8" data-in-range="false" data-amount="3.44" data-amount-in-range="true"><td style="">300577</td><td style="">开润股份</td><td style="font-size:13px;color:#aaa;">48.8</td><td style="color:#CC6600;font-weight:700;">41.1</td><td>10%</td><td style="text-align:center;">—</td><td>2</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="121.1" data-in-range="true" data-amount="5.01" data-amount-in-range="true"><td style="">600744</td><td style="">华银电力</td><td style="font-size:13px;color:#375623;">121.1</td><td style="color:#C00000;font-weight:700;">38.4</td><td>35%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="25.9" data-in-range="false" data-amount="0.66" data-amount-in-range="false"><td style="">603161</td><td style="">科华控股</td><td style="font-size:13px;color:#aaa;">25.9</td><td style="color:#C00000;font-weight:700;">35.4</td><td>27%</td><td style="text-align:center;">—</td><td>2</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr><tr data-mv="58.0" data-in-range="true" data-amount="4.10" data-amount-in-range="true"><td style="">600722</td><td style="">金牛化工</td><td style="font-size:13px;color:#375623;">58.0</td><td style="color:#C00000;font-weight:700;">33.4</td><td>22%</td><td style="text-align:center;">—</td><td>0</td><td style="font-size:13px;font-weight:600;text-align:left;overflow:hidden;text-overflow:ellipsis;" title=""></td></tr></tbody></table></div></div><div class="footer">首板分析系统 V20260707.001 · 按历史得分排序 · 市值/成交额筛选可组合</div></div>
+<script>
+function scolor(s) {
+    if (s >= 80) return "#375623";
+    if (s >= 60) return "#2E75B5";
+    if (s >= 40) return "#CC6600";
+    return "#C00000";
+}
+
+function updateStats(data) {
+    var s = data.stats;
+    document.getElementById("stat-total").textContent = s.total;
+    document.getElementById("stat-lh").textContent = s.lh;
+}
+
+function updateMainTable() {
+    var allRows = document.querySelectorAll("tbody tr[data-mv]");
+    var visibleCount = 0;
+    for (var i = 0; i < allRows.length; i++) {
+        var row = allRows[i];
+        var show = true;
+        if (mvFilter) {
+            show = show && row.getAttribute("data-in-range") === "true";
+        }
+        if (amountFilter) {
+            show = show && row.getAttribute("data-amount-in-range") === "true";
+        }
+        row.style.display = show ? "" : "none";
+        if (show) visibleCount++;
+    }
+    var title = document.getElementById("main-table-title");
+    var desc = [];
+    if (mvFilter) desc.push("市值50-800亿");
+    if (amountFilter) desc.push("成交额1.5-35亿");
+    if (desc.length > 0) {
+        title.textContent = desc.join(" + ") + " 首板股票（" + visibleCount + "只，按历史得分排序）";
+    } else {
+        title.textContent = "全部首板股票（" + visibleCount + "只，按历史得分排序）";
+    }
+}
+
+function getCurrentViewKey() {
+    if (mvFilter && amountFilter) return "mv_amount";
+    if (mvFilter) return "mv";
+    if (amountFilter) return "amount";
+    return "all";
+}
+
+function switchView(view) {
+    if (view === "all") {
+        mvFilter = false;
+        amountFilter = false;
+    }
+    updateButtons();
+    var data = VIEW_DATA[getCurrentViewKey()];
+    updateStats(data);
+    updateMainTable();
+}
+
+function toggleFilter(filter) {
+    if (filter === "mv") {
+        mvFilter = !mvFilter;
+    } else if (filter === "amount") {
+        amountFilter = !amountFilter;
+    }
+    updateButtons();
+    var data = VIEW_DATA[getCurrentViewKey()];
+    updateStats(data);
+    updateMainTable();
+}
+
+function updateButtons() {
+    var btnAll = document.getElementById("btn-all");
+    var btnMv = document.getElementById("btn-mv");
+    var btnAmt = document.getElementById("btn-amount");
+    btnAll.classList.toggle("active", !mvFilter && !amountFilter);
+    btnMv.classList.toggle("active", mvFilter);
+    btnAmt.classList.toggle("active", amountFilter);
+}
+
+// 初始化为"全部"视图
+switchView("all");
+</script>
+</body></html>
