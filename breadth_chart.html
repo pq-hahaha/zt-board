@@ -1,8 +1,8 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260719.001-beizhu
-  上线日期: 2026-07-19
+  版本序列号: V20260720.001-beizhucunchu
+  上线日期: 2026-07-20
   基于版本: V20260703.002-guananchituozhuapaixu-cdnbusting
   功能清单:
     1. 个股5分钟K线(10交易日×48根=480点, 默认显示7天可拉到10天)
@@ -38,10 +38,11 @@
         - dataZoom start:30 默认显示7天(336/480=70%), 可拉到10天
         - 三种markPoint(金色/橙色/红色)遍历dayBoundaries自动适配, 无需改逻辑
         - 情绪/V2评分的7天窗口是算法设计, 不随图谱显示天数变
-    === V20260719 新增 ===
+    === V20260720 新增 ===
     17. 个股备注(gegubeizhu): 标题行右侧独立备注框(textarea 5行/100字)
         - 利用header右上角蓝色空白区, control-bar高度不变 → 图谱不下移
-        - 存储: localStorage['zt_stock_notes'], 结构 {code:"备注"}, 按代码隔离
+        - 存储: 本地 POST /api/notes 落盘 stock_notes.json(结构 {code:"备注"}), deploy后线上 fetch 只读
+        - 迁移: 首次打开自动把旧 localStorage['zt_stock_notes'] 合并进文件并清除本地副本
         - loadStockNote/saveStockNote 按 id='stockNote' 取 .value
         - header 改 flex 左右分栏; control-bar 加 padding-right:340px 对齐标题行
   数据加载:
@@ -51,7 +52,8 @@
     - stock_basic_scores_v2.json (382KB) → GitHub Pages
     - pinyin_initials.json (79KB) → GitHub Pages
   版本历史:
-    V20260719.001-beizhu [当前版 - 个股备注功能]
+    V20260720.001-beizhucunchu [当前版 - 备注存储文件化+迁移+服务端/api/notes]
+    V20260719.001-beizhu [上一版 - 个股备注UI]
     V20260703.002-guananchituozhuapaixu-cdnbusting [更早版]
     V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian [9.5MB全量加载]
     V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys [更早稳定版]
@@ -453,6 +455,7 @@ window.addEventListener('resize', function() { chart.resize(); });
 
 // === V004: 优先加载chart_data.json (7.5KB, 秒开) ===
 dataReady.then(function() {
+    fetchServerNotes().then(migrateLocalNotes);  // 备注: 拉文件 + 一次性迁移旧浏览器数据
 return fetch('chart_data.json?v=' + DATA_VERSION).then(function(r) { return r.json(); }).then(function(d) {
     xLabels = d.xLabels;
     advData = d.advData;
@@ -565,7 +568,9 @@ function renderStockChart(code) {
 var WL_KEY = 'zt_watchlist';
 var WL_BAK_KEY = 'zt_watchlist_bak';
 var WL_REMOVED_KEY = 'zt_watchlist_removed';
-var NOTE_KEY = 'zt_stock_notes';
+var NOTE_KEY = 'zt_stock_notes';  // 仅用于一次性迁移旧浏览器数据
+var serverNotes = {};             // 服务端 stock_notes.json 内存缓存
+var notesLoaded = false;
 var WL_MAX = 30;
 var wlMode = 'normal';
 var wlSelected = new Set();
@@ -795,31 +800,88 @@ function loadBasicScoresV2() {
     return basicScoresV2Loading;
 }
 
-// 个股笔记：单机 localStorage，按股票代码独立存储
+// 个股笔记: 本地 POST /api/notes 落盘 stock_notes.json, 线上只读
+function fetchServerNotes() {
+    return fetch(getBaseUrl() + 'stock_notes.json?t=' + Date.now()).then(function (r) {
+        if (!r.ok) return {};
+        return r.json();
+    }).then(function (d) {
+        serverNotes = d || {};
+        notesLoaded = true;
+        return serverNotes;
+    }).catch(function () {
+        serverNotes = {};
+        notesLoaded = true;
+        return serverNotes;
+    });
+}
+
+function postNote(code, text) {
+    return fetch(getBaseUrl() + 'api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, text: text })
+    }).then(function (r) {
+        if (!r.ok) throw new Error('http ' + r.status);
+        return r.json();
+    });
+}
+
+// 一次性迁移: 把旧 localStorage 备注合并进文件, 然后清除本地副本
+function migrateLocalNotes() {
+    if (!notesLoaded) return;
+    try {
+        var local = JSON.parse(localStorage.getItem(NOTE_KEY) || '{}');
+        var codes = Object.keys(local);
+        if (codes.length === 0) return;
+        var pending = [];
+        codes.forEach(function (code) {
+            if (!(code in serverNotes)) {
+                serverNotes[code] = local[code];
+                pending.push(code);
+            }
+        });
+        if (pending.length === 0) {
+            localStorage.removeItem(NOTE_KEY);
+            return;
+        }
+        var chain = Promise.resolve();
+        pending.forEach(function (code) {
+            chain = chain.then(function () { return postNote(code, local[code]); });
+        });
+        chain.then(function () {
+            localStorage.removeItem(NOTE_KEY);
+        }).catch(function () { /* 线上/写失败: 保留本地, 不清除 */ });
+    } catch (e) { /* ignore */ }
+}
+
 function loadStockNote(code) {
     try {
-        var notes = JSON.parse(localStorage.getItem(NOTE_KEY) || '{}');
-        document.getElementById('stockNote').value = notes[code] || '';
+        document.getElementById('stockNote').value = serverNotes[code] || '';
     } catch (e) {
         document.getElementById('stockNote').value = '';
     }
 }
+
 function saveStockNote() {
     var code = document.getElementById('stockCode').value.trim();
     if (!code) return;
     var txt = document.getElementById('stockNote').value;
-    try {
-        var notes = JSON.parse(localStorage.getItem(NOTE_KEY) || '{}');
-        if (txt) notes[code] = txt; else delete notes[code];
-        localStorage.setItem(NOTE_KEY, JSON.stringify(notes));
-        var ind = document.getElementById('loadIndicator');
+    // 先更新内存缓存, 即时回填显示
+    if (txt) serverNotes[code] = txt; else delete serverNotes[code];
+    var ind = document.getElementById('loadIndicator');
+    postNote(code, txt).then(function () {
         if (ind) {
             ind.textContent = '备注已存 ' + new Date().toLocaleTimeString();
             setTimeout(function () { ind.textContent = ''; }, 1500);
         }
-    } catch (e) {
-        alert('备注保存失败: ' + e.message);
-    }
+    }).catch(function () {
+        // 线上静态站点无 /api/notes -> 静默失败, 内存已更新仅本次会话可见
+        if (ind) {
+            ind.textContent = '线上只读, 请在本地维护';
+            setTimeout(function () { ind.textContent = ''; }, 1500);
+        }
+    });
 }
 
 function showBasicScoreV2(code) {
