@@ -1,8 +1,8 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260713.001-tupushitian
-  上线日期: 2026-07-13
+  版本序列号: V20260719.001-beizhu
+  上线日期: 2026-07-19
   基于版本: V20260703.002-guananchituozhuapaixu-cdnbusting
   功能清单:
     1. 个股5分钟K线(10交易日×48根=480点, 默认显示7天可拉到10天)
@@ -38,6 +38,12 @@
         - dataZoom start:30 默认显示7天(336/480=70%), 可拉到10天
         - 三种markPoint(金色/橙色/红色)遍历dayBoundaries自动适配, 无需改逻辑
         - 情绪/V2评分的7天窗口是算法设计, 不随图谱显示天数变
+    === V20260719 新增 ===
+    17. 个股备注(gegubeizhu): 标题行右侧独立备注框(textarea 5行/100字)
+        - 利用header右上角蓝色空白区, control-bar高度不变 → 图谱不下移
+        - 存储: localStorage['zt_stock_notes'], 结构 {code:"备注"}, 按代码隔离
+        - loadStockNote/saveStockNote 按 id='stockNote' 取 .value
+        - header 改 flex 左右分栏; control-bar 加 padding-right:340px 对齐标题行
   数据加载:
     - chart_data.json (7.5KB) → GitHub Pages [V004新增, 图谱核心数据+默认股, 480点]
     - stocks/{code}.json (2KB/只) → GitHub Pages [V004.002新增, 按需加载单只K线, 480点]
@@ -45,7 +51,8 @@
     - stock_basic_scores_v2.json (382KB) → GitHub Pages
     - pinyin_initials.json (79KB) → GitHub Pages
   版本历史:
-    V20260703.002-guananchituozhuapaixu-cdnbusting [上一版]
+    V20260719.001-beizhu [当前版 - 个股备注功能]
+    V20260703.002-guananchituozhuapaixu-cdnbusting [更早版]
     V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian [9.5MB全量加载]
     V20260628.003-jiazaichengsedian-cdnjiasu-xiufujinsedian-tongbuyscys [更早稳定版]
     V20260628.001-jiazaichengsedian-cdnjiasu [已废弃 - 金色点位置bug]
@@ -66,9 +73,9 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-serif; padding: 10px; }
-.header { text-align: center; margin-bottom: 8px; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 0 10px; margin-bottom: 8px; }
 .header h1 { font-size: 20px; color: #c0392b; }
-.control-bar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.control-bar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; padding-right: 340px; }
 .control-bar input {
     padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
     font-size: 14px; width: 130px; outline: none;
@@ -115,8 +122,15 @@ body { background: #f5f6fa; color: #333; font-family: "Microsoft YaHei", sans-se
 <div class="lock-overlay" id="lockOverlay"><div class="lock-box"><h2>赚钱效应图谱</h2><p>请输入密码查看内容</p><input type="password" class="lock-input" id="lockInput" placeholder="输入密码" autocomplete="off"><button class="lock-btn" id="lockBtn">查看图表</button><div class="lock-err" id="lockErr">密码错误，请重新输入</div></div></div>
 <script>async function sha256(str){const buf=new TextEncoder().encode(str);const hash=await crypto.subtle.digest("SHA-256",buf);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");}document.getElementById("lockBtn").onclick=async function(){var pwd=document.getElementById("lockInput").value;var hash=await sha256(pwd);if(hash==="805503e693c40ae7a50d9d574345f68cd8bca12b97f9f20f74f26c1575662c14"){document.getElementById("lockOverlay").style.display="none";localStorage.setItem("zt_auth","ok")}else{document.getElementById("lockErr").style.display="block";document.getElementById("lockInput").value="";document.getElementById("lockInput").focus()}};document.getElementById("lockInput").onkeydown=function(e){if(e.key==="Enter")document.getElementById("lockBtn").click()};if(localStorage.getItem("zt_auth")==="ok"){document.getElementById("lockOverlay").style.display="none";}</script>
 <div class="header">
-    <h1>赚钱效应图谱 v2</h1>
-    <p style="font-size:13px;color:#888;margin-top:4px;">最新交易日: <b style="color:#e74c3c">2026-06-29</b> | 数据区间: 2026-06-18 ~ 2026-06-29</p>
+    <div style="flex:1; text-align:center;">
+        <h1>赚钱效应图谱 v2</h1>
+        <p style="font-size:13px;color:#888;margin-top:4px;">最新交易日: <b style="color:#e74c3c">2026-06-29</b> | 数据区间: 2026-06-18 ~ 2026-06-29</p>
+    </div>
+    <div style="display:flex; align-items:flex-start; gap:4px; margin-right:48px;">
+        <textarea id="stockNote" rows="5" maxlength="100" placeholder="备注"
+            style="width:248px; height:83px; font-family:'Microsoft YaHei','微软雅黑',sans-serif; font-size:12px; line-height:15px; padding:3px 6px; border:1px solid #ccc; border-radius:4px; resize:none; overflow:hidden;"></textarea>
+        <button onclick="saveStockNote()" style="font-family:'Microsoft YaHei','微软雅黑',sans-serif; font-size:12px; padding:4px 10px; cursor:pointer;">存</button>
+    </div>
 </div>
 <div class="control-bar">
     <div style="position:relative;display:inline-block;">
@@ -524,6 +538,7 @@ function loadStock() {
     var code = document.getElementById('stockCode').value.trim();
     if (!code) return;
     showBasicScoreV2(code);
+    loadStockNote(code);
     if (allStockData[code]) { renderStockChart(code); return; }
     // V004: 按需加载单只股票K线
     var name = stockNames[code] || code;
@@ -550,6 +565,7 @@ function renderStockChart(code) {
 var WL_KEY = 'zt_watchlist';
 var WL_BAK_KEY = 'zt_watchlist_bak';
 var WL_REMOVED_KEY = 'zt_watchlist_removed';
+var NOTE_KEY = 'zt_stock_notes';
 var WL_MAX = 30;
 var wlMode = 'normal';
 var wlSelected = new Set();
@@ -777,6 +793,33 @@ function loadBasicScoresV2() {
         renderWatchlist();
     }).catch(function(e) { console.warn('V2 scores load failed:', e); basicScoresV2Loading = null; });
     return basicScoresV2Loading;
+}
+
+// 个股笔记：单机 localStorage，按股票代码独立存储
+function loadStockNote(code) {
+    try {
+        var notes = JSON.parse(localStorage.getItem(NOTE_KEY) || '{}');
+        document.getElementById('stockNote').value = notes[code] || '';
+    } catch (e) {
+        document.getElementById('stockNote').value = '';
+    }
+}
+function saveStockNote() {
+    var code = document.getElementById('stockCode').value.trim();
+    if (!code) return;
+    var txt = document.getElementById('stockNote').value;
+    try {
+        var notes = JSON.parse(localStorage.getItem(NOTE_KEY) || '{}');
+        if (txt) notes[code] = txt; else delete notes[code];
+        localStorage.setItem(NOTE_KEY, JSON.stringify(notes));
+        var ind = document.getElementById('loadIndicator');
+        if (ind) {
+            ind.textContent = '备注已存 ' + new Date().toLocaleTimeString();
+            setTimeout(function () { ind.textContent = ''; }, 1500);
+        }
+    } catch (e) {
+        alert('备注保存失败: ' + e.message);
+    }
 }
 
 function showBasicScoreV2(code) {
