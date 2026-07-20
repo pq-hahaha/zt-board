@@ -28,6 +28,30 @@ body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; backgro
 .fr-btn.on { background: #C00000; }
 .fr-btn.on:hover { background: #D00000; }
 .toolbar { margin-bottom: 20px; text-align: right; }
+.upd-badge { display: inline-flex; align-items: center; gap: 6px; background: #eee; color: #666; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; transition: background 0.2s; margin-right: 10px; vertical-align: middle; }
+.upd-badge:hover { background: #e2e2e2; }
+.upd-badge.new { background: #375623; color: #fff; }
+.upd-badge.bad { background: #C00000; color: #fff; }
+.upd-dot { width: 8px; height: 8px; border-radius: 50%; background: #aaa; display: inline-block; }
+.upd-badge.new .upd-dot { background: #9fe1cb; }
+.upd-badge.bad .upd-dot { background: #fff; }
+.modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+.modal-mask.show { display: flex; }
+.modal { background: #fff; border-radius: 12px; max-width: 760px; width: 92%; max-height: 86vh; overflow: auto; padding: 24px 28px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
+.modal h2 { font-size: 18px; margin-bottom: 14px; }
+.modal .close { float: right; cursor: pointer; color: #999; font-size: 22px; line-height: 1; margin-left: 12px; }
+.modal .close:hover { color: #333; }
+.chk { list-style: none; padding: 0; margin: 0 0 16px; }
+.chk li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+.chk .mk { font-weight: 700; width: 16px; text-align: center; }
+.chk .ok { color: #375623; }
+.chk .no { color: #C00000; }
+.chk .lbl { flex: 1; }
+.chk .val { color: #666; font-size: 13px; }
+.md-box { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 14px 16px; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.7; font-family: "Microsoft YaHei", "PingFang SC", monospace; }
+.anomaly { border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; font-size: 13px; }
+.anomaly.bad { background: #FCEBEB; color: #A32D2D; }
+.anomaly.ok { background: #EAF3DE; color: #3B6D11; }
 </style>
 </head>
 <body>
@@ -37,6 +61,7 @@ body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; backgro
     <p>HTTP Server localhost:8765</p>
   </div>
   <div class="toolbar">
+    <span class="upd-badge" id="updBadge" onclick="openProgress()"><span class="upd-dot"></span><span id="updText">更新进度</span></span>
     <button class="fr-btn" id="frBtn" onclick="toggleFR()">强制刷新: 关</button>
   </div>
   <div class="cards">
@@ -63,6 +88,15 @@ body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; backgro
   </div>
   <div class="footer">daily_update 跑完后刷新即可看到最新数据 &middot; 开启强制刷新后点击卡片绕过缓存</div>
 </div>
+<div class="modal-mask" id="updMask" onclick="if(event.target===this)closeProgress()">
+  <div class="modal">
+    <span class="close" onclick="closeProgress()">&times;</span>
+    <h2 id="updModalTitle">今日更新进度</h2>
+    <div id="updAnomaly" class="anomaly ok"></div>
+    <ul class="chk" id="updChk"></ul>
+    <div class="md-box" id="updMd">加载中…</div>
+  </div>
+</div>
 <script>
 var frOn = false;
 function toggleFR() {
@@ -80,6 +114,84 @@ document.querySelectorAll('.card').forEach(function(card) {
         }
     });
 });
+
+// ===== 每日更新进度 widget (只读 zt-board-pages/update_progress.json) =====
+var UPD_KEY = 'dash_last_seen_update';
+function fmtNum(n){ return (n===undefined||n===null)?'?':n; }
+
+function loadProgress(){
+  fetch('update_progress.json', {cache:'no-store'}).then(function(r){
+    if(!r.ok) throw new Error('no'); return r.json();
+  }).then(renderProgress).catch(function(){
+    document.getElementById('updBadge').style.display = 'none';
+  });
+}
+
+function renderProgress(p){
+  var badge = document.getElementById('updBadge');
+  badge.style.display = 'inline-flex';
+  var last = localStorage.getItem(UPD_KEY) || '';
+  var isNew = p.generated_at && p.generated_at > last;
+  var anom = p.anomaly && p.anomaly.length > 0;
+  badge.className = 'upd-badge' + (anom ? ' bad' : (isNew ? ' new' : ''));
+  var txt = document.getElementById('updText');
+  if(anom){ txt.textContent = '更新异常 ✗'; }
+  else if(isNew){ txt.textContent = '有更新 ●'; }
+  else { txt.textContent = '已读 ✓'; }
+  window.__upd = p;
+}
+
+function openProgress(){
+  var p = window.__upd;
+  if(!p){ return; }
+  document.getElementById('updModalTitle').textContent = '今日更新进度 ' + (p.date || '');
+  var an = document.getElementById('updAnomaly');
+  if(p.anomaly && p.anomaly.length > 0){
+    an.className = 'anomaly bad';
+    an.textContent = '⚠️ 异常: ' + p.anomaly;
+  } else {
+    an.className = 'anomaly ok';
+    an.textContent = '✅ 无异常';
+  }
+  var items = [
+    ['图谱', p.breadth_done, ''],
+    ['V2 评分', true, fmtNum(p.v2_count) + ' 家'],
+    ['情绪', true, fmtNum(p.emotion_count) + ' 家'],
+    ['看板基本', p.deploy_basic, ''],
+    ['龙虎榜', p.longhu_done, ''],
+    ['涨停原因', (p.zt_reason_count > 0), fmtNum(p.zt_reason_count) + ' 家'],
+    ['自建库', true, fmtNum(p.self_db_count) + ' 家']
+  ];
+  var ul = document.getElementById('updChk');
+  ul.innerHTML = '';
+  items.forEach(function(it){
+    var li = document.createElement('li');
+    var mk = document.createElement('span'); mk.className = 'mk ' + (it[1] ? 'ok' : 'no'); mk.textContent = it[1] ? '✓' : '✗';
+    var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = it[0];
+    var val = document.createElement('span'); val.className = 'val'; val.textContent = it[2] || '';
+    li.appendChild(mk); li.appendChild(lbl); li.appendChild(val); ul.appendChild(li);
+  });
+  var li = document.createElement('li');
+  var hasAnom = (p.anomaly && p.anomaly.length > 0);
+  var mk = document.createElement('span'); mk.className = 'mk ' + (hasAnom ? 'no' : 'ok'); mk.textContent = hasAnom ? '✗' : '✓';
+  var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = '异常检测';
+  var val = document.createElement('span'); val.className = 'val'; val.textContent = hasAnom ? p.anomaly : '无';
+  li.appendChild(mk); li.appendChild(lbl); li.appendChild(val); ul.appendChild(li);
+
+  document.getElementById('updMd').textContent = '加载中…';
+  fetch('daily_report_latest.md', {cache:'no-store'}).then(function(r){ return r.text(); }).then(function(t){
+    document.getElementById('updMd').textContent = t;
+  }).catch(function(){ document.getElementById('updMd').textContent = '（报告加载失败）'; });
+
+  document.getElementById('updMask').className = 'modal-mask show';
+  if(p.generated_at){ localStorage.setItem(UPD_KEY, p.generated_at); }
+  renderProgress(p);
+}
+
+function closeProgress(){ document.getElementById('updMask').className = 'modal-mask'; }
+
+loadProgress();
+setInterval(loadProgress, 60000);
 </script>
 </body>
 </html>
