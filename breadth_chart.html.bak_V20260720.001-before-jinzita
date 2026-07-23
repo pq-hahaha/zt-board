@@ -1,7 +1,7 @@
 <!--
 ============================================
   赚钱效应图谱 - 正式运营版
-  版本序列号: V20260724.001-jinzita
+  版本序列号: V20260720.001-beizhucunchu
   上线日期: 2026-07-20
   基于版本: V20260703.002-guananchituozhuapaixu-cdnbusting
   功能清单:
@@ -52,8 +52,7 @@
     - stock_basic_scores_v2.json (382KB) → GitHub Pages
     - pinyin_initials.json (79KB) → GitHub Pages
   版本历史:
-    V20260724.001-jinzita [当前版 - 删除:487 stocks/json name回灌, 股票名称唯一源=stock_pool→pinyin_initials]
-    V20260720.001-beizhucunchu [上一版 - 备注存储文件化+迁移+服务端/api/notes]
+    V20260720.001-beizhucunchu [当前版 - 备注存储文件化+迁移+服务端/api/notes]
     V20260719.001-beizhu [上一版 - 个股备注UI]
     V20260703.002-guananchituozhuapaixu-cdnbusting [更早版]
     V20260629.001-dongtaitongbu-cdnqiehuan-guananchiyouxian [9.5MB全量加载]
@@ -485,7 +484,7 @@ function loadSingleStock(code) {
     }).then(function(d) {
         if (d) {
             var prices = d.prices || d;  // 兼容旧格式(纯数组)和新格式({name,prices})
-
+            if (d.name) stockNames[code] = d.name;  // 顺便填充名称
             allStockData[code] = prices;
             return prices;
         }
