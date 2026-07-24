@@ -1,14 +1,14 @@
 {
-  "date": "2026-07-23",
-  "generated_at": "2026-07-23T17:31:11",
+  "date": "2026-07-24",
+  "generated_at": "2026-07-24T18:20:37",
   "breadth_done": true,
-  "v2_count": 365,
+  "v2_count": 356,
   "emotion_count": 4992,
   "deploy_basic": true,
   "longhu_done": true,
-  "longhu_date": "2026-07-23",
-  "zt_reason_count": 21,
-  "self_db_count": 17,
+  "longhu_date": "2026-07-24",
+  "zt_reason_count": 8,
+  "self_db_count": 12,
   "all_done": true,
   "anomaly": ""
 }
